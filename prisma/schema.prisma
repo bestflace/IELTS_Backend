@@ -1,0 +1,749 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ai_gradings {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id             String             @db.VarChar(32)
+  skill                  test_type
+  provider               String             @default("GEMINI") @db.VarChar(50)
+  status                 grading_job_status @default(PENDING)
+  request_json           Json?
+  response_json          Json?
+  normalized_result_json Json?
+  error_message          String?
+  retry_count            Int                @default(0)
+  started_at             DateTime?          @db.Timestamptz(6)
+  finished_at            DateTime?          @db.Timestamptz(6)
+  created_at             DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime           @default(now()) @db.Timestamptz(6)
+  attempts               attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([attempt_id], map: "idx_ai_gradings_attempt")
+  @@index([status, created_at], map: "idx_ai_gradings_status")
+}
+
+model asr_jobs {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id    String             @db.VarChar(32)
+  provider      String             @default("WHISPER") @db.VarChar(50)
+  status        grading_job_status @default(PENDING)
+  request_json  Json?
+  response_json Json?
+  error_message String?
+  retry_count   Int                @default(0)
+  started_at    DateTime?          @db.Timestamptz(6)
+  finished_at   DateTime?          @db.Timestamptz(6)
+  created_at    DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime           @default(now()) @db.Timestamptz(6)
+  attempts      attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([attempt_id], map: "idx_asr_jobs_attempt")
+  @@index([status, created_at], map: "idx_asr_jobs_status")
+}
+
+model attempt_comments {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id             String             @db.VarChar(32)
+  user_id                String             @db.Uuid
+  parent_id              String?            @db.Uuid
+  content                String
+  status                 comment_status     @default(ACTIVE)
+  created_at             DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime           @default(now()) @db.Timestamptz(6)
+  deleted_at             DateTime?          @db.Timestamptz(6)
+  attempts               attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  attempt_comments       attempt_comments?  @relation("attempt_commentsToattempt_comments", fields: [parent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  other_attempt_comments attempt_comments[] @relation("attempt_commentsToattempt_comments")
+  users                  users              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([attempt_id, created_at], map: "idx_attempt_comments_attempt")
+  @@index([parent_id], map: "idx_attempt_comments_parent")
+}
+
+model attempt_question_answers {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id  String     @db.VarChar(32)
+  question_id String?    @db.Uuid
+  q_no        Int?
+  answer_json Json       @default("{}")
+  is_flagged  Boolean    @default(false)
+  is_final    Boolean    @default(false)
+  saved_at    DateTime   @default(now()) @db.Timestamptz(6)
+  attempts    attempts   @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  questions   questions? @relation(fields: [question_id], references: [id], onUpdate: NoAction)
+
+  @@unique([attempt_id, question_id], map: "uq_attempt_question")
+  @@index([attempt_id, saved_at(sort: Desc)], map: "idx_attempt_question_answers_attempt")
+}
+
+model attempt_result_details {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id       String     @db.VarChar(32)
+  question_id      String?    @db.Uuid
+  q_no             Int?
+  user_answer_json Json?
+  correct_json     Json?
+  is_correct       Boolean?
+  points_awarded   Decimal?   @db.Decimal(6, 2)
+  explanation      String?
+  created_at       DateTime   @default(now()) @db.Timestamptz(6)
+  attempts         attempts   @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  questions        questions? @relation(fields: [question_id], references: [id], onUpdate: NoAction)
+
+  @@unique([attempt_id, question_id], map: "uq_attempt_result_detail")
+  @@index([attempt_id], map: "idx_attempt_result_details_attempt")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model attempt_results {
+  attempt_id    String   @id @db.VarChar(32)
+  correct_count Int?
+  total_count   Int?
+  raw_score     Decimal? @db.Decimal(6, 2)
+  band_estimate Decimal? @db.Decimal(2, 1)
+  summary_json  Json?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+  attempts      attempts @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model attempt_snapshots {
+  attempt_id         String   @id @db.VarChar(32)
+  test_snapshot_json Json
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  attempts           attempts @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model attempt_speaking_responses {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id       String             @db.VarChar(32)
+  speaking_part    speaking_part_type
+  prompt_id        String?            @db.Uuid
+  audio_url        String
+  transcript       String?
+  duration_sec     Int?
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  attempts         attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  speaking_prompts speaking_prompts?  @relation(fields: [prompt_id], references: [id], onUpdate: NoAction)
+
+  @@unique([attempt_id, speaking_part], map: "uq_attempt_speaking_part")
+  @@index([attempt_id], map: "idx_attempt_speaking_attempt")
+}
+
+model attempt_writing_responses {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id      String        @db.VarChar(32)
+  writing_task_id String        @db.VarChar(32)
+  response_text   String?
+  word_count      Int?
+  saved_at        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime      @default(now()) @db.Timestamptz(6)
+  attempts        attempts      @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  writing_tasks   writing_tasks @relation(fields: [writing_task_id], references: [id], onUpdate: NoAction)
+
+  @@unique([attempt_id, writing_task_id], map: "uq_attempt_writing_task")
+  @@index([attempt_id], map: "idx_attempt_writing_responses_attempt")
+}
+
+model attempts {
+  id                         String                       @id @db.VarChar(32)
+  user_id                    String                       @db.Uuid
+  test_id                    String                       @db.VarChar(32)
+  mode                       test_type
+  part_label                 String?                      @db.VarChar(20)
+  time_limit_sec             Int
+  started_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  expires_at                 DateTime?                    @db.Timestamptz(6)
+  submitted_at               DateTime?                    @db.Timestamptz(6)
+  graded_at                  DateTime?                    @db.Timestamptz(6)
+  status                     attempt_status               @default(IN_PROGRESS)
+  created_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  ai_gradings                ai_gradings[]
+  asr_jobs                   asr_jobs[]
+  attempt_comments           attempt_comments[]
+  attempt_question_answers   attempt_question_answers[]
+  attempt_result_details     attempt_result_details[]
+  attempt_results            attempt_results?
+  attempt_snapshots          attempt_snapshots?
+  attempt_speaking_responses attempt_speaking_responses[]
+  attempt_writing_responses  attempt_writing_responses[]
+  tests                      tests                        @relation(fields: [test_id], references: [id], onUpdate: NoAction)
+  users                      users                        @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_reviews            teacher_reviews[]
+  teacher_submissions        teacher_submissions[]
+
+  @@index([status], map: "idx_attempts_status")
+  @@index([test_id], map: "idx_attempts_test")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_attempts_user")
+}
+
+model auth_tokens {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String     @db.Uuid
+  token_type token_type
+  token_hash String     @unique
+  expires_at DateTime   @db.Timestamptz(6)
+  used_at    DateTime?  @db.Timestamptz(6)
+  revoked_at DateTime?  @db.Timestamptz(6)
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
+  users      users      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "idx_auth_tokens_expires_at")
+  @@index([user_id, token_type], map: "idx_auth_tokens_user")
+}
+
+model blog_tags {
+  blog_id String @db.Uuid
+  tag_id  String @db.Uuid
+  blogs   blogs  @relation(fields: [blog_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tags    tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([blog_id, tag_id])
+}
+
+model blogs {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title            String      @db.VarChar(255)
+  slug             String      @unique @db.VarChar(255)
+  excerpt          String?
+  content_markdown String
+  cover_image_url  String?
+  status           blog_status @default(DRAFT)
+  published_at     DateTime?   @db.Timestamptz(6)
+  created_by       String?     @db.Uuid
+  created_at       DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime    @default(now()) @db.Timestamptz(6)
+  blog_tags        blog_tags[]
+  users            users?      @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+
+  @@index([published_at(sort: Desc)], map: "idx_blogs_published_at")
+  @@index([status], map: "idx_blogs_status")
+}
+
+model import_jobs {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type          import_type
+  status        import_status @default(PENDING)
+  file_url      String
+  uploaded_by   String?       @db.Uuid
+  request_json  Json?
+  result_json   Json?
+  error_message String?
+  started_at    DateTime?     @db.Timestamptz(6)
+  finished_at   DateTime?     @db.Timestamptz(6)
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime      @default(now()) @db.Timestamptz(6)
+  users         users?        @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
+
+  @@index([status, created_at(sort: Desc)], map: "idx_import_jobs_status")
+}
+
+model listening_set_tags {
+  listening_set_id String         @db.VarChar(32)
+  tag_id           String         @db.Uuid
+  listening_sets   listening_sets @relation(fields: [listening_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tags             tags           @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([listening_set_id, tag_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model listening_sets {
+  id                 String               @id @db.VarChar(32)
+  title              String               @db.VarChar(255)
+  transcript_text    String?
+  audio_url          String?
+  audio_source       audio_source_type?
+  level              Decimal?             @db.Decimal(2, 1)
+  status             publish_status       @default(DRAFT)
+  created_by         String?              @db.Uuid
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime             @default(now()) @db.Timestamptz(6)
+  listening_set_tags listening_set_tags[]
+  users              users?               @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  questions          questions[]
+  test_sections      test_sections[]
+
+  @@index([level], map: "idx_listening_sets_level")
+  @@index([status], map: "idx_listening_sets_status")
+}
+
+model notifications {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String            @db.Uuid
+  type       notification_type
+  title      String            @db.VarChar(255)
+  message    String
+  data_json  Json?
+  is_read    Boolean           @default(false)
+  created_at DateTime          @default(now()) @db.Timestamptz(6)
+  read_at    DateTime?         @db.Timestamptz(6)
+  users      users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, is_read], map: "idx_notifications_unread")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_notifications_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model questions {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reading_set_id           String?                    @db.VarChar(32)
+  listening_set_id         String?                    @db.VarChar(32)
+  section_label            String?                    @db.VarChar(50)
+  q_no                     Int
+  question_type            question_type
+  prompt_text              String
+  instruction_text         String?
+  options_json             Json?
+  correct_answer_json      Json                       @default("{}")
+  explanation              String?
+  points                   Decimal                    @default(1) @db.Decimal(6, 2)
+  sort_order               Int                        @default(1)
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  attempt_question_answers attempt_question_answers[]
+  attempt_result_details   attempt_result_details[]
+  listening_sets           listening_sets?            @relation(fields: [listening_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reading_sets             reading_sets?              @relation(fields: [reading_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([listening_set_id, q_no], map: "uq_questions_listening_qno", where: raw("(listening_set_id IS NOT NULL)"))
+  @@unique([reading_set_id, q_no], map: "uq_questions_reading_qno", where: raw("(reading_set_id IS NOT NULL)"))
+  @@index([listening_set_id, sort_order], map: "idx_questions_listening")
+  @@index([q_no], map: "idx_questions_q_no")
+  @@index([reading_set_id, sort_order], map: "idx_questions_reading")
+}
+
+model reading_set_tags {
+  reading_set_id String       @db.VarChar(32)
+  tag_id         String       @db.Uuid
+  reading_sets   reading_sets @relation(fields: [reading_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tags           tags         @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([reading_set_id, tag_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reading_sets {
+  id               String             @id @db.VarChar(32)
+  title            String             @db.VarChar(255)
+  passage_html     String?
+  passage_text     String?
+  level            Decimal?           @db.Decimal(2, 1)
+  status           publish_status     @default(DRAFT)
+  created_by       String?            @db.Uuid
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
+  questions        questions[]
+  reading_set_tags reading_set_tags[]
+  users            users?             @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  test_sections    test_sections[]
+
+  @@index([level], map: "idx_reading_sets_level")
+  @@index([status], map: "idx_reading_sets_status")
+}
+
+model speaking_parts {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  speaking_set_id  String             @db.VarChar(32)
+  part_type        speaking_part_type
+  title            String?            @db.VarChar(255)
+  instructions     String?
+  recommended_sec  Int?
+  sort_order       Int
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @default(now()) @db.Timestamptz(6)
+  speaking_sets    speaking_sets      @relation(fields: [speaking_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  speaking_prompts speaking_prompts[]
+
+  @@unique([speaking_set_id, part_type], map: "uq_speaking_set_part")
+  @@index([speaking_set_id, sort_order], map: "idx_speaking_parts_set")
+}
+
+model speaking_prompt_items {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  speaking_prompt_id String           @db.Uuid
+  item_text          String
+  sort_order         Int              @default(1)
+  created_at         DateTime         @default(now()) @db.Timestamptz(6)
+  speaking_prompts   speaking_prompts @relation(fields: [speaking_prompt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([speaking_prompt_id, sort_order], map: "idx_speaking_prompt_items_prompt")
+}
+
+model speaking_prompts {
+  id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  speaking_part_id           String                       @db.Uuid
+  prompt_type                speaking_prompt_type
+  content                    String
+  notes                      String?
+  time_suggest_sec           Int?
+  sort_order                 Int                          @default(1)
+  created_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                     @default(now()) @db.Timestamptz(6)
+  attempt_speaking_responses attempt_speaking_responses[]
+  speaking_prompt_items      speaking_prompt_items[]
+  speaking_parts             speaking_parts               @relation(fields: [speaking_part_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([speaking_part_id, sort_order], map: "idx_speaking_prompts_part")
+}
+
+model speaking_set_tags {
+  speaking_set_id String        @db.VarChar(32)
+  tag_id          String        @db.Uuid
+  speaking_sets   speaking_sets @relation(fields: [speaking_set_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tags            tags          @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([speaking_set_id, tag_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model speaking_sets {
+  id                String              @id @db.VarChar(32)
+  topic             String?             @db.VarChar(255)
+  level             Decimal?            @db.Decimal(2, 1)
+  status            publish_status      @default(DRAFT)
+  created_by        String?             @db.Uuid
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  speaking_parts    speaking_parts[]
+  speaking_set_tags speaking_set_tags[]
+  users             users?              @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  test_sections     test_sections[]
+
+  @@index([level], map: "idx_speaking_sets_level")
+  @@index([status], map: "idx_speaking_sets_status")
+}
+
+model system_configs {
+  key        String   @id @db.VarChar(100)
+  value_json Json
+  updated_by String?  @db.Uuid
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users?   @relation(fields: [updated_by], references: [id], onUpdate: NoAction)
+}
+
+model tags {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String               @unique @db.VarChar(100)
+  slug               String               @unique @db.VarChar(120)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime             @default(now()) @db.Timestamptz(6)
+  blog_tags          blog_tags[]
+  listening_set_tags listening_set_tags[]
+  reading_set_tags   reading_set_tags[]
+  speaking_set_tags  speaking_set_tags[]
+  test_tags          test_tags[]
+  writing_task_tags  writing_task_tags[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model teacher_reviews {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submission_id       String              @unique @db.Uuid
+  attempt_id          String              @db.VarChar(32)
+  teacher_id          String              @db.Uuid
+  overall_band        Decimal?            @db.Decimal(2, 1)
+  criteria_json       Json                @default("{}")
+  summary             String?
+  action_items_json   Json                @default("[]")
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
+  attempts            attempts            @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_submissions teacher_submissions @relation(fields: [submission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users               users               @relation(fields: [teacher_id], references: [id], onUpdate: NoAction)
+
+  @@index([attempt_id], map: "idx_teacher_reviews_attempt")
+  @@index([teacher_id], map: "idx_teacher_reviews_teacher")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model teacher_submissions {
+  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id      String                    @db.VarChar(32)
+  skill           test_type
+  status          teacher_submission_status @default(PENDING)
+  claimed_by      String?                   @db.Uuid
+  claimed_at      DateTime?                 @db.Timestamptz(6)
+  reviewed_at     DateTime?                 @db.Timestamptz(6)
+  created_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  teacher_reviews teacher_reviews?
+  attempts        attempts                  @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users?                    @relation(fields: [claimed_by], references: [id], onUpdate: NoAction)
+
+  @@unique([attempt_id, skill], map: "uq_teacher_submission_attempt_skill")
+  @@index([claimed_by], map: "idx_teacher_submissions_claimed_by")
+  @@index([status, created_at], map: "idx_teacher_submissions_status")
+}
+
+model test_publish_events {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  test_id      String   @db.VarChar(32)
+  published_at DateTime @default(now()) @db.Timestamptz(6)
+  published_by String?  @db.Uuid
+  users        users?   @relation(fields: [published_by], references: [id], onUpdate: NoAction)
+  tests        tests    @relation(fields: [test_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([test_id, published_at(sort: Desc)], map: "idx_test_publish_events_test")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model test_sections {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  test_id          String            @db.VarChar(32)
+  section_type     test_section_type
+  reading_set_id   String?           @db.VarChar(32)
+  listening_set_id String?           @db.VarChar(32)
+  writing_task_id  String?           @db.VarChar(32)
+  speaking_set_id  String?           @db.VarChar(32)
+  part_label       String?           @db.VarChar(20)
+  sort_order       Int               @default(1)
+  time_limit_sec   Int?
+  created_at       DateTime          @default(now()) @db.Timestamptz(6)
+  listening_sets   listening_sets?   @relation(fields: [listening_set_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  reading_sets     reading_sets?     @relation(fields: [reading_set_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  speaking_sets    speaking_sets?    @relation(fields: [speaking_set_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  tests            tests             @relation(fields: [test_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  writing_tasks    writing_tasks?    @relation(fields: [writing_task_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([test_id, sort_order], map: "idx_test_sections_test")
+  @@index([section_type], map: "idx_test_sections_type")
+}
+
+model test_tags {
+  test_id String @db.VarChar(32)
+  tag_id  String @db.Uuid
+  tags    tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tests   tests  @relation(fields: [test_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([test_id, tag_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tests {
+  id                  String                @id @db.VarChar(32)
+  type                test_type
+  title               String                @db.VarChar(255)
+  level               Decimal?              @db.Decimal(2, 1)
+  status              publish_status        @default(DRAFT)
+  description         String?
+  published_at        DateTime?             @db.Timestamptz(6)
+  created_by          String?               @db.Uuid
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  attempts            attempts[]
+  test_publish_events test_publish_events[]
+  test_sections       test_sections[]
+  test_tags           test_tags[]
+  users               users?                @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+
+  @@index([published_at], map: "idx_tests_published_at")
+  @@index([status], map: "idx_tests_status")
+  @@index([type], map: "idx_tests_type")
+}
+
+model users {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name           String                @db.VarChar(255)
+  email               String                @unique @db.Citext
+  password_hash       String
+  avatar_url          String?
+  role                user_role             @default(USER)
+  status              user_status           @default(ACTIVE)
+  email_verified_at   DateTime?             @db.Timestamptz(6)
+  last_login_at       DateTime?             @db.Timestamptz(6)
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  attempt_comments    attempt_comments[]
+  attempts            attempts[]
+  auth_tokens         auth_tokens[]
+  blogs               blogs[]
+  import_jobs         import_jobs[]
+  listening_sets      listening_sets[]
+  notifications       notifications[]
+  reading_sets        reading_sets[]
+  speaking_sets       speaking_sets[]
+  system_configs      system_configs[]
+  teacher_reviews     teacher_reviews[]
+  teacher_submissions teacher_submissions[]
+  test_publish_events test_publish_events[]
+  tests               tests[]
+  writing_tasks       writing_tasks[]
+
+  @@index([role], map: "idx_users_role")
+  @@index([status], map: "idx_users_status")
+}
+
+model writing_task_tags {
+  writing_task_id String        @db.VarChar(32)
+  tag_id          String        @db.Uuid
+  tags            tags          @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  writing_tasks   writing_tasks @relation(fields: [writing_task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([writing_task_id, tag_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model writing_tasks {
+  id                        String                      @id @db.VarChar(32)
+  task_no                   Int?
+  title                     String                      @db.VarChar(255)
+  prompt_text               String
+  chart_url                 String?
+  image_url                 String?
+  level                     Decimal?                    @db.Decimal(2, 1)
+  status                    publish_status              @default(DRAFT)
+  created_by                String?                     @db.Uuid
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  attempt_writing_responses attempt_writing_responses[]
+  test_sections             test_sections[]
+  writing_task_tags         writing_task_tags[]
+  users                     users?                      @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+
+  @@index([level], map: "idx_writing_tasks_level")
+  @@index([status], map: "idx_writing_tasks_status")
+  @@index([task_no], map: "idx_writing_tasks_task_no")
+}
+
+enum attempt_status {
+  IN_PROGRESS
+  SUBMITTED
+  GRADING
+  GRADED
+  ERROR
+  EXPIRED
+}
+
+enum audio_source_type {
+  UPLOAD
+  URL
+  R2
+}
+
+enum blog_status {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum comment_status {
+  ACTIVE
+  HIDDEN
+  DELETED
+}
+
+enum grading_job_status {
+  PENDING
+  RUNNING
+  DONE
+  ERROR
+}
+
+enum import_status {
+  PENDING
+  PROCESSING
+  DONE
+  ERROR
+}
+
+enum import_type {
+  READING_SET
+  LISTENING_SET
+  WRITING_TASK
+  SPEAKING_SET
+  TEST
+}
+
+enum notification_type {
+  TEST_PUBLISHED
+  AI_GRADING_DONE
+  TEACHER_REVIEW_DONE
+  BLOG_PUBLISHED
+  SYSTEM
+}
+
+enum publish_status {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum question_type {
+  MULTIPLE_CHOICE
+  TRUE_FALSE_NOT_GIVEN
+  YES_NO_NOT_GIVEN
+  MATCHING_HEADINGS
+  MATCHING_INFORMATION
+  MATCHING_FEATURES
+  MATCHING_SENTENCE_ENDINGS
+  SENTENCE_COMPLETION
+  SUMMARY_COMPLETION
+  NOTE_COMPLETION
+  TABLE_COMPLETION
+  FLOWCHART_COMPLETION
+  DIAGRAM_LABEL_COMPLETION
+  SHORT_ANSWER
+  FORM_COMPLETION
+  MAP_LABELING
+}
+
+enum speaking_part_type {
+  PART_1
+  PART_2
+  PART_3
+}
+
+enum speaking_prompt_type {
+  QUESTION
+  CUE_CARD
+  FOLLOW_UP
+  TOPIC
+  INTRO
+}
+
+enum teacher_submission_status {
+  PENDING
+  CLAIMED
+  REVIEWED
+}
+
+enum test_section_type {
+  READING_SET
+  LISTENING_SET
+  WRITING_TASK
+  SPEAKING_SET
+}
+
+enum test_type {
+  READING
+  LISTENING
+  WRITING
+  SPEAKING
+  FULL
+}
+
+enum token_type {
+  REFRESH
+  RESET_PASSWORD
+}
+
+enum user_role {
+  USER
+  TEACHER
+  ADMIN
+}
+
+enum user_status {
+  ACTIVE
+  BLOCKED
+  PENDING
+}
