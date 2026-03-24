@@ -1,27 +1,18 @@
 import { Response } from "express";
 
-export const sendSuccess = (
+export function sendSuccess<T>(
   res: Response,
-  data: unknown,
-  message = "Success",
-  statusCode = 200,
-) => {
-  return res.status(statusCode).json({
+  options: {
+    statusCode?: number;
+    message: string;
+    data: T;
+    meta?: Record<string, unknown>;
+  },
+) {
+  return res.status(options.statusCode ?? 200).json({
     success: true,
-    message,
-    data,
+    message: options.message,
+    data: options.data,
+    ...(options.meta ? { meta: options.meta } : {}),
   });
-};
-
-export const sendError = (
-  res: Response,
-  message = "Error",
-  statusCode = 500,
-  error?: unknown,
-) => {
-  return res.status(statusCode).json({
-    success: false,
-    message,
-    error,
-  });
-};
+}

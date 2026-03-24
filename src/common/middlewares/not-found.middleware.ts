@@ -1,8 +1,10 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
+import { NotFoundError } from "../errors/not-found.error";
 
-export const notFoundMiddleware = (req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.originalUrl} not found`,
-  });
-};
+export function notFoundMiddleware(
+  _req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
+  next(new NotFoundError("Route not found"));
+}
