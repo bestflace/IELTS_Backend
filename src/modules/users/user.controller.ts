@@ -30,4 +30,62 @@ export const userController = {
       data: result,
     });
   },
+
+  async adminListUsers(req: Request, res: Response) {
+    const result = await userService.adminListUsers(req.query as never);
+
+    return sendSuccess(res, {
+      message: MESSAGE.ADMIN_USER.LIST_SUCCESS,
+      data: result.items,
+      meta: result.meta,
+    });
+  },
+
+  async adminGetUserById(req: Request, res: Response) {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const user = await userService.adminGetUserById(id);
+
+    return sendSuccess(res, {
+      message: MESSAGE.ADMIN_USER.DETAIL_SUCCESS,
+      data: user,
+    });
+  },
+
+  async adminUpdateUser(req: Request, res: Response) {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const user = await userService.adminUpdateUser(req.user!.sub, id, req.body);
+
+    return sendSuccess(res, {
+      message: MESSAGE.ADMIN_USER.UPDATE_SUCCESS,
+      data: user,
+    });
+  },
+
+  async adminUpdateUserRole(req: Request, res: Response) {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const user = await userService.adminUpdateUserRole(
+      req.user!.sub,
+      id,
+      req.body,
+    );
+
+    return sendSuccess(res, {
+      message: MESSAGE.ADMIN_USER.ROLE_UPDATED,
+      data: user,
+    });
+  },
+
+  async adminUpdateUserStatus(req: Request, res: Response) {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const user = await userService.adminUpdateUserStatus(
+      req.user!.sub,
+      id,
+      req.body,
+    );
+
+    return sendSuccess(res, {
+      message: MESSAGE.ADMIN_USER.STATUS_UPDATED,
+      data: user,
+    });
+  },
 };
