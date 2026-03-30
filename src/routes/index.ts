@@ -9,6 +9,14 @@ import listeningRoute from "../modules/listening/listening.route";
 import readingRoute from "../modules/reading/reading.route";
 import writingRoute from "../modules/writing/writing.route";
 import testRoute from "../modules/test/test.route";
+import attemptRoute from "../modules/attempts/attempt.route";
+import uploadRoute from "../modules/uploads/upload.route";
+import teacherReviewRoute from "../modules/teacher-reviews/teacher-review.route";
+import commentRoute from "../modules/comments/comment.route";
+import blogRoute from "../modules/blogs/blog.route";
+import notificationRoute from "../modules/notifications/notification.route";
+import reportRoute from "../modules/reports/report.route";
+import importRoute from "../modules/imports/import.route";
 const router = Router();
 
 router.use("/health", healthRoute);
@@ -21,5 +29,12 @@ router.use(listeningRoute);
 router.use(readingRoute);
 router.use(writingRoute);
 router.use(testRoute);
-
+router.use(attemptRoute);
+router.use(uploadRoute);
+router.use(teacherReviewRoute);
+router.use(commentRoute);
+router.use(blogRoute);
+router.use(notificationRoute);
+router.use(reportRoute);
+router.use(importRoute);
 export default router;

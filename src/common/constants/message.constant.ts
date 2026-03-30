@@ -255,4 +255,147 @@ export const MESSAGE = {
       "Not enough published content to build the requested test",
     REROLL_NOT_AVAILABLE: "No alternative content is available for reroll",
   },
+  UPLOAD: {
+    PRESIGN_SUCCESS: "Create upload presigned URL successfully",
+    COMPLETE_SUCCESS: "Complete upload successfully",
+    DELETE_SUCCESS: "Delete uploaded file successfully",
+
+    INVALID_FOLDER: "Invalid upload folder",
+    FORBIDDEN_FOLDER: "You do not have permission to upload to this folder",
+    INVALID_CONTENT_TYPE: "Content type is not allowed for this folder",
+    INVALID_FILE_KEY: "Invalid file key",
+    FILE_NOT_FOUND: "Uploaded file not found",
+    CANNOT_ACCESS_FOREIGN_FILE:
+      "You do not have permission to access this file",
+    R2_NOT_CONFIGURED: "R2 storage is not configured",
+    EMPTY_UPLOADED_FILE: "Uploaded file is empty",
+  },
+  ATTEMPT: {
+    CREATE_SUCCESS: "Create attempt successfully",
+    LIST_SUCCESS: "Get attempts successfully",
+    DETAIL_SUCCESS: "Get attempt successfully",
+    SESSION_SUCCESS: "Get attempt session successfully",
+    GRADING_STATUS_SUCCESS: "Get grading status successfully",
+
+    QUESTION_ANSWERS_SAVED: "Save question answers successfully",
+    QUESTION_ANSWER_UPDATED: "Update question answer successfully",
+
+    WRITING_RESPONSES_SAVED: "Save writing responses successfully",
+
+    SPEAKING_RESPONSES_SAVED: "Save speaking responses successfully",
+    SPEAKING_RESPONSE_UPDATED: "Update speaking response successfully",
+
+    SUBMIT_SUCCESS: "Submit attempt successfully",
+    RESULT_SUCCESS: "Get attempt result successfully",
+    REVIEW_SUCCESS: "Get attempt review successfully",
+    EXPIRE_SUCCESS: "Expire attempt successfully",
+
+    NOT_FOUND: "Attempt not found",
+    SNAPSHOT_NOT_FOUND: "Attempt snapshot not found",
+    RESULT_NOT_FOUND: "Attempt result not found",
+
+    TEST_NOT_FOUND: "Test not found",
+    TEST_NOT_PUBLISHED: "Test is not published",
+    MODE_NOT_SUPPORTED: "Attempt mode is not supported by the selected test",
+    INVALID_TIME_LIMIT: "Invalid custom time limit",
+    EXPIRED: "Attempt has expired",
+    ALREADY_SUBMITTED: "Attempt has already been submitted",
+    NOT_IN_PROGRESS: "Attempt is not in progress",
+
+    QUESTION_NOT_IN_ATTEMPT: "Question does not belong to this attempt",
+    WRITING_TASK_NOT_IN_ATTEMPT: "Writing task does not belong to this attempt",
+    SPEAKING_PROMPT_NOT_IN_ATTEMPT:
+      "Speaking prompt does not belong to this attempt",
+    SPEAKING_PART_NOT_IN_ATTEMPT:
+      "Speaking part does not belong to this attempt",
+
+    FORCE_REQUIRED_AFTER_EXPIRY:
+      "Attempt has expired. Use force=true to submit anyway.",
+  },
+  TEACHER_REVIEW: {
+    LIST_SUCCESS: "Get teacher submissions successfully",
+    DETAIL_SUCCESS: "Get teacher submission successfully",
+    CLAIM_SUCCESS: "Claim submission successfully",
+    RELEASE_SUCCESS: "Release submission successfully",
+    WRITING_REVIEW_SUCCESS: "Submit writing review successfully",
+    SPEAKING_REVIEW_SUCCESS: "Submit speaking review successfully",
+    DASHBOARD_SUCCESS: "Get teacher dashboard successfully",
+
+    SUBMISSION_NOT_FOUND: "Teacher submission not found",
+    REVIEW_NOT_ALLOWED: "You are not allowed to review this submission",
+    SUBMISSION_ALREADY_REVIEWED: "This submission has already been reviewed",
+    SUBMISSION_ALREADY_CLAIMED:
+      "This submission has been claimed by another teacher",
+    SUBMISSION_NOT_CLAIMED_BY_YOU: "This submission is not claimed by you",
+    INVALID_SUBMISSION_SKILL:
+      "Submission skill is not valid for this review type",
+  },
+  COMMENT: {
+    LIST_SUCCESS: "Get comments successfully",
+    CREATE_SUCCESS: "Create comment successfully",
+    UPDATE_SUCCESS: "Update comment successfully",
+    DELETE_SUCCESS: "Delete comment successfully",
+    HIDE_SUCCESS: "Hide comment successfully",
+    UNHIDE_SUCCESS: "Unhide comment successfully",
+
+    NOT_FOUND: "Comment not found",
+    ATTEMPT_NOT_FOUND: "Attempt not found",
+    PARENT_NOT_FOUND: "Parent comment not found",
+    FORBIDDEN: "You do not have permission to modify this comment",
+  },
+  BLOG: {
+    LIST_SUCCESS: "Get blogs successfully",
+    DETAIL_SUCCESS: "Get blog successfully",
+    ADMIN_LIST_SUCCESS: "Get blogs successfully",
+    ADMIN_DETAIL_SUCCESS: "Get blog successfully",
+    CREATE_SUCCESS: "Create blog successfully",
+    UPDATE_SUCCESS: "Update blog successfully",
+    DELETE_SUCCESS: "Delete blog successfully",
+    PUBLISH_SUCCESS: "Publish blog successfully",
+    UNPUBLISH_SUCCESS: "Unpublish blog successfully",
+
+    NOT_FOUND: "Blog not found",
+    TAG_NOT_FOUND: "One or more tags do not exist",
+    SLUG_EXISTS: "Blog slug already exists",
+  },
+  NOTIFICATION: {
+    LIST_SUCCESS: "Get notifications successfully",
+    UNREAD_COUNT_SUCCESS: "Get unread notification count successfully",
+    READ_SUCCESS: "Mark notification as read successfully",
+    READ_ALL_SUCCESS: "Mark all notifications as read successfully",
+    INTERNAL_TEST_PUBLISHED_SUCCESS:
+      "Send test published notifications successfully",
+    INTERNAL_SUBMISSION_REVIEWED_SUCCESS:
+      "Send submission reviewed notification successfully",
+
+    NOT_FOUND: "Notification not found",
+    TEST_NOT_FOUND: "Test not found",
+    ATTEMPT_NOT_FOUND: "Attempt not found",
+  },
+  REPORT: {
+    USER_OVERVIEW_SUCCESS: "Get user overview report successfully",
+    USER_SKILLS_SUCCESS: "Get user skill report successfully",
+    USER_TIMELINE_SUCCESS: "Get user timeline report successfully",
+
+    TEACHER_OVERVIEW_SUCCESS: "Get teacher overview report successfully",
+    TEACHER_PERFORMANCE_SUCCESS: "Get teacher performance report successfully",
+
+    ADMIN_OVERVIEW_SUCCESS: "Get admin overview report successfully",
+    ADMIN_ATTEMPTS_SUCCESS: "Get admin attempt report successfully",
+    ADMIN_TESTS_SUCCESS: "Get admin test report successfully",
+    ADMIN_USERS_SUCCESS: "Get admin user report successfully",
+    ADMIN_TEACHER_GRADING_SUCCESS:
+      "Get admin teacher grading report successfully",
+    ADMIN_BANDS_SUCCESS: "Get admin band distribution report successfully",
+  },
+  IMPORT: {
+    LIST_SUCCESS: "Get import jobs successfully",
+    DETAIL_SUCCESS: "Get import job successfully",
+    CREATE_SUCCESS: "Create import job successfully",
+    ERRORS_SUCCESS: "Get import job errors successfully",
+    RETRY_SUCCESS: "Retry import job successfully",
+
+    NOT_FOUND: "Import job not found",
+    INVALID_RETRY_STATE: "Import job cannot be retried while processing",
+  },
 } as const;

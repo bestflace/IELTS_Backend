@@ -1,9 +1,4 @@
-import {
-  Prisma,
-  publish_status,
-  test_section_type,
-  test_type,
-} from "@prisma/client";
+import { publish_status, test_section_type, test_type } from "@prisma/client";
 import { DEFAULT_SYSTEM_CONFIG } from "../../common/constants/system-config.constant";
 import { MESSAGE } from "../../common/constants/message.constant";
 import { BadRequestError } from "../../common/errors/bad-request.error";
@@ -14,6 +9,7 @@ import {
   buildPaginationMeta,
   parsePagination,
 } from "../../common/utils/pagination";
+import { enqueueTestPublishedNotification } from "../../jobs/queues";
 import {
   mapAdminTestDetail,
   mapPublicTestDetail,
@@ -65,16 +61,6 @@ function getAllowedSectionTypeByTestType(
   if (type === test_type.WRITING) return test_section_type.WRITING_TASK;
   if (type === test_type.SPEAKING) return test_section_type.SPEAKING_SET;
   return null;
-}
-
-function getMatchingTestTypeForSectionType(
-  sectionType: test_section_type,
-): test_type {
-  if (sectionType === test_section_type.READING_SET) return test_type.READING;
-  if (sectionType === test_section_type.LISTENING_SET)
-    return test_type.LISTENING;
-  if (sectionType === test_section_type.WRITING_TASK) return test_type.WRITING;
-  return test_type.SPEAKING;
 }
 
 async function assertTagsExist(tagIds?: string[]) {
@@ -661,6 +647,7 @@ export const testService = {
     if (body.publishNow) {
       await validateSectionsForPublish(body.id);
       const published = await testRepository.publishTest(body.id, adminUserId);
+      await enqueueTestPublishedNotification(body.id);
       return mapAdminTestDetail(published!);
     }
 
@@ -875,6 +862,7 @@ export const testService = {
     await validateSectionsForPublish(testId);
 
     const published = await testRepository.publishTest(testId, adminUserId);
+    await enqueueTestPublishedNotification(testId);
 
     return mapAdminTestDetail(published!);
   },
@@ -939,6 +927,7 @@ export const testService = {
     if (body.publishNow) {
       await validateSectionsForPublish(id);
       const published = await testRepository.publishTest(id, adminUserId);
+      await enqueueTestPublishedNotification(id);
       return mapAdminTestDetail(published!);
     }
 
