@@ -17,11 +17,13 @@ import blogRoute from "../modules/blogs/blog.route";
 import notificationRoute from "../modules/notifications/notification.route";
 import reportRoute from "../modules/reports/report.route";
 import importRoute from "../modules/imports/import.route";
+import adminUserRoute from "../modules/users/admin-user.route";
 const router = Router();
 
 router.use("/health", healthRoute);
 router.use("/auth", authRoute);
 router.use("/users", userRoute);
+router.use("/admin/users", adminUserRoute);
 router.use(tagRoute);
 router.use(systemConfigRoute);
 router.use(speakingRoute);
