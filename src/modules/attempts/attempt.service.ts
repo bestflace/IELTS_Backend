@@ -34,11 +34,7 @@ import {
   SaveWritingResponseItem,
   SubmitAttemptBody,
 } from "./attempt.types";
-import {
-  enqueueSpeakingAsr,
-  enqueueSpeakingAiGrading,
-  enqueueWritingAiGrading,
-} from "../../jobs/queues";
+import { enqueueSpeakingAsr, enqueueWritingAiGrading } from "../../jobs/queues";
 function aggregateGradingJobStatus(statuses: Array<string | null | undefined>) {
   const normalized = statuses.filter(Boolean) as string[];
 
@@ -57,6 +53,78 @@ function aggregateTeacherStatus(statuses: Array<string | null | undefined>) {
   if (normalized.some((status) => status === "CLAIMED")) return "CLAIMED";
   return "REVIEWED";
 }
+function mapAiJobForClient(job: any) {
+  if (!job) return null;
+
+  return {
+    id: job.id,
+    skill: job.skill,
+    provider: job.provider,
+    status: job.status,
+    errorMessage: job.error_message,
+    retryCount: job.retry_count,
+    startedAt: job.started_at,
+    finishedAt: job.finished_at,
+    normalizedResult: job.normalized_result_json,
+  };
+}
+
+function mapAsrPartForClient(response: any) {
+  return {
+    speakingPart: response.speaking_part,
+    speakingResponseId: response.id,
+    promptId: response.prompt_id,
+    status: response.asr_status,
+    provider: response.asr_provider,
+    errorMessage: response.asr_error_message,
+    startedAt: response.asr_started_at,
+    finishedAt: response.asr_finished_at,
+    hasTranscript: !!response.transcript,
+    hasWhisperResponse: !!response.whisper_response_json,
+  };
+}
+
+function getLatestAiJob(attempt: any, skill: test_type) {
+  return (
+    attempt.ai_gradings.find(
+      (item: any) => item.skill === skill && item.provider === "GEMINI",
+    ) ?? null
+  );
+}
+
+function buildGradingJobsPayload(attempt: any) {
+  const writingAiJob = getLatestAiJob(attempt, test_type.WRITING);
+  const speakingAiJob = getLatestAiJob(attempt, test_type.SPEAKING);
+
+  const asrParts = (attempt.attempt_speaking_responses ?? []).map(
+    mapAsrPartForClient,
+  );
+
+  const asrStatus = aggregateGradingJobStatus(
+    asrParts.map((item: any) => item.status),
+  );
+
+  const writingAiStatus = aggregateGradingJobStatus(
+    writingAiJob ? [writingAiJob.status] : [],
+  );
+
+  const speakingAiStatus = aggregateGradingJobStatus(
+    speakingAiJob ? [speakingAiJob.status] : [],
+  );
+
+  return {
+    asrStatus,
+    asrParts,
+    aiStatus: aggregateGradingJobStatus([
+      writingAiJob?.status,
+      speakingAiJob?.status,
+    ]),
+    writingAiStatus,
+    speakingAiStatus,
+    writingAi: mapAiJobForClient(writingAiJob),
+    speakingAi: mapAiJobForClient(speakingAiJob),
+  };
+}
 function generateAttemptId(): string {
   const ts = Date.now().toString(36).toUpperCase();
   const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -67,13 +135,6 @@ function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
-function normalizeNullableText(
-  value?: string | null,
-): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  return normalizeText(value);
-}
 function toJsonInput(
   value: unknown,
 ): Prisma.InputJsonValue | Prisma.JsonNullValueInput {
@@ -913,7 +974,13 @@ export const attemptService = {
       responses.map((response) => ({
         speakingPart: response.speakingPart as speaking_part_type,
         promptId: response.promptId ?? null,
+
         audioUrl: response.audioUrl,
+        audioFileKey: response.audioFileKey,
+        audioMimeType: response.audioMimeType,
+        audioSizeBytes: response.audioSizeBytes,
+        audioETag: response.audioETag ?? null,
+
         durationSec: response.durationSec ?? null,
       })),
     );
@@ -975,12 +1042,21 @@ export const attemptService = {
       speakingPart,
       {
         ...(body.promptId !== undefined ? { prompt_id: body.promptId } : {}),
+
         ...(body.audioUrl !== undefined ? { audio_url: body.audioUrl } : {}),
+        ...(body.audioFileKey !== undefined
+          ? { audio_file_key: body.audioFileKey }
+          : {}),
+        ...(body.audioMimeType !== undefined
+          ? { audio_mime_type: body.audioMimeType }
+          : {}),
+        ...(body.audioSizeBytes !== undefined
+          ? { audio_size_bytes: body.audioSizeBytes }
+          : {}),
+        ...(body.audioETag !== undefined ? { audio_etag: body.audioETag } : {}),
+
         ...(body.durationSec !== undefined
           ? { duration_sec: body.durationSec }
-          : {}),
-        ...(body.transcript !== undefined
-          ? { transcript: normalizeNullableText(body.transcript) }
           : {}),
       },
     );
@@ -1123,17 +1199,90 @@ export const attemptService = {
       await attemptRepository.createTeacherSubmissions(attemptId, [
         test_type.WRITING,
       ]);
-      await attemptRepository.createPendingWritingAiGrading(attemptId);
-      await enqueueWritingAiGrading(attemptId);
+
+      const writingAiJob =
+        await attemptRepository.getOrCreatePendingWritingAiGrading(attemptId);
+
+      await enqueueWritingAiGrading({
+        attemptId,
+        aiGradingId: writingAiJob.id,
+      });
     }
 
     if (pendingSkills.includes(test_type.SPEAKING)) {
       await attemptRepository.createTeacherSubmissions(attemptId, [
         test_type.SPEAKING,
       ]);
-      await attemptRepository.createPendingSpeakingAsrJob(attemptId);
-      await attemptRepository.createPendingSpeakingAiGrading(attemptId);
-      await enqueueSpeakingAsr(attemptId);
+
+      const speakingInfo = collectSpeakingInfo(
+        snapshot,
+        attempt.mode,
+        attempt.part_label,
+      );
+
+      const expectedParts = Array.from(
+        speakingInfo.parts,
+      ) as speaking_part_type[];
+
+      const requiredSpeakingParts = [
+        speaking_part_type.PART_1,
+        speaking_part_type.PART_2,
+        speaking_part_type.PART_3,
+      ];
+
+      const missingSnapshotParts = requiredSpeakingParts.filter(
+        (part) => !speakingInfo.parts.has(part),
+      );
+
+      if (missingSnapshotParts.length > 0) {
+        throw new BadRequestError(
+          `Speaking set is missing required parts: ${missingSnapshotParts.join(", ")}`,
+        );
+      }
+
+      const speakingResponses = attempt.attempt_speaking_responses ?? [];
+
+      const missingParts = requiredSpeakingParts.filter((part) => {
+        const response = speakingResponses.find(
+          (item) => item.speaking_part === part,
+        );
+
+        return (
+          !response ||
+          !response.audio_url ||
+          !response.audio_file_key ||
+          !response.audio_mime_type ||
+          !response.audio_size_bytes
+        );
+      });
+
+      if (missingParts.length > 0) {
+        throw new BadRequestError(
+          `Speaking must have completed audio uploads for all parts before submit: ${missingParts.join(", ")}`,
+        );
+      }
+
+      const asrJobs = await attemptRepository.createPendingSpeakingAsrJobs(
+        attemptId,
+        speakingResponses
+          .filter((item) => requiredSpeakingParts.includes(item.speaking_part))
+          .map((item) => ({
+            id: item.id,
+            speaking_part: item.speaking_part,
+          })),
+      );
+
+      for (const asrJob of asrJobs) {
+        if (!asrJob.attempt_speaking_response_id) {
+          continue;
+        }
+
+        await enqueueSpeakingAsr({
+          attemptId,
+          asrJobId: asrJob.id,
+          speakingResponseId: asrJob.attempt_speaking_response_id,
+        });
+      }
     }
 
     const finalStatus =
@@ -1175,13 +1324,7 @@ export const attemptService = {
 
     await syncExpireIfNeeded(attempt);
 
-    const latestWritingAi =
-      attempt.ai_gradings.find((item) => item.skill === test_type.WRITING) ??
-      null;
-    const latestSpeakingAi =
-      attempt.ai_gradings.find((item) => item.skill === test_type.SPEAKING) ??
-      null;
-    const latestAsr = attempt.asr_jobs[0] ?? null;
+    const gradingJobs = buildGradingJobsPayload(attempt);
 
     return {
       attemptId: attempt.id,
@@ -1213,11 +1356,7 @@ export const attemptService = {
       teacherReviews: attempt.teacher_submissions
         .flatMap((item) => item.teacher_reviews ?? [])
         .map(mapTeacherReview),
-      gradingJobs: {
-        asrStatus: latestAsr?.status ?? null,
-        writingAiStatus: latestWritingAi?.status ?? null,
-        speakingAiStatus: latestSpeakingAi?.status ?? null,
-      },
+      gradingJobs,
     };
   },
 
@@ -1309,13 +1448,7 @@ export const attemptService = {
 
     await syncExpireIfNeeded(attempt);
 
-    const latestAsr = attempt.asr_jobs[0] ?? null;
-    const writingAiJobs = attempt.ai_gradings.filter(
-      (item) => item.skill === test_type.WRITING,
-    );
-    const speakingAiJobs = attempt.ai_gradings.filter(
-      (item) => item.skill === test_type.SPEAKING,
-    );
+    const gradingJobs = buildGradingJobsPayload(attempt);
 
     const teacherStatuses = attempt.teacher_submissions.map(
       (item) => item.status,
@@ -1324,18 +1457,18 @@ export const attemptService = {
     return {
       attemptId: attempt.id,
       status: attempt.status,
-      asrStatus: latestAsr?.status ?? null,
-      aiStatus: aggregateGradingJobStatus([
-        ...writingAiJobs.map((item) => item.status),
-        ...speakingAiJobs.map((item) => item.status),
-      ]),
+
+      asrStatus: gradingJobs.asrStatus,
+      asrParts: gradingJobs.asrParts,
+
+      aiStatus: gradingJobs.aiStatus,
+      writingAiStatus: gradingJobs.writingAiStatus,
+      speakingAiStatus: gradingJobs.speakingAiStatus,
+
+      writingAi: gradingJobs.writingAi,
+      speakingAi: gradingJobs.speakingAi,
+
       teacherStatus: aggregateTeacherStatus(teacherStatuses),
-      writingAiStatus: aggregateGradingJobStatus(
-        writingAiJobs.map((item) => item.status),
-      ),
-      speakingAiStatus: aggregateGradingJobStatus(
-        speakingAiJobs.map((item) => item.status),
-      ),
       teacherSubmissions: attempt.teacher_submissions.map((item) => ({
         id: item.id,
         skill: item.skill,

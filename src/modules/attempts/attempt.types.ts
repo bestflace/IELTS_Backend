@@ -43,15 +43,26 @@ export type SaveWritingResponseItem = {
 export type SaveSpeakingResponseItem = {
   speakingPart: "PART_1" | "PART_2" | "PART_3";
   promptId?: string | null;
+
   audioUrl: string;
+  audioFileKey: string;
+  audioMimeType: string;
+  audioSizeBytes: number;
+  audioETag?: string | null;
+
   durationSec?: number | null;
 };
 
 export type PatchSpeakingResponseBody = {
   promptId?: string | null;
+
   audioUrl?: string | null;
+  audioFileKey?: string | null;
+  audioMimeType?: string | null;
+  audioSizeBytes?: number | null;
+  audioETag?: string | null;
+
   durationSec?: number | null;
-  transcript?: string | null;
 };
 
 export type SubmitAttemptBody = {

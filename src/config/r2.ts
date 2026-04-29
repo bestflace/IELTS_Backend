@@ -1,4 +1,5 @@
-import { S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { Readable } from "stream";
 
 type R2Config = {
   endpoint: string;
@@ -51,10 +52,64 @@ export function getR2Client(): S3Client {
 
 export function buildR2FileUrl(key: string): string {
   const config = getR2Config();
+  const cleanKey = key.replace(/^\/+/, "");
 
   if (config.publicUrl) {
-    return `${config.publicUrl}/${key}`;
+    return `${config.publicUrl}/${cleanKey}`;
   }
 
-  return `${config.endpoint}/${config.bucket}/${key}`;
+  return `${config.endpoint}/${config.bucket}/${cleanKey}`;
+}
+
+export async function downloadR2ObjectToBuffer(params: {
+  fileKey: string;
+  maxBytes?: number;
+}): Promise<{
+  buffer: Buffer;
+  contentType: string | null;
+  contentLength: number | null;
+  eTag: string | null;
+}> {
+  const config = getR2Config();
+  const client = getR2Client();
+  const cleanKey = params.fileKey.replace(/^\/+/, "");
+  const maxBytes = params.maxBytes ?? 25 * 1024 * 1024;
+
+  const result = await client.send(
+    new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: cleanKey,
+    }),
+  );
+
+  const contentLength = result.ContentLength ?? null;
+
+  if (contentLength !== null && contentLength > maxBytes) {
+    throw new Error(`R2 object is too large for ASR: ${contentLength} bytes`);
+  }
+
+  if (!result.Body) {
+    throw new Error(`R2 object has empty body: ${cleanKey}`);
+  }
+
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  for await (const chunk of result.Body as Readable) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+
+    if (total > maxBytes) {
+      throw new Error(`R2 object exceeded ASR size limit: ${total} bytes`);
+    }
+
+    chunks.push(buffer);
+  }
+
+  return {
+    buffer: Buffer.concat(chunks),
+    contentType: result.ContentType ?? null,
+    contentLength: contentLength ?? total,
+    eTag: result.ETag ?? null,
+  };
 }

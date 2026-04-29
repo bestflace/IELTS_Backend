@@ -5,6 +5,7 @@ import {
   speaking_part_type,
   teacher_submission_status,
   test_type,
+  transcript_source,
 } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 
@@ -173,7 +174,56 @@ export const attemptRepository = {
       },
     });
   },
+  async createPendingSpeakingAsrJobs(
+    attemptId: string,
+    responses: Array<{
+      id: string;
+      speaking_part: speaking_part_type;
+    }>,
+  ) {
+    const jobs = [];
 
+    for (const response of responses) {
+      const dedupeKey = `speaking-asr:${response.id}`;
+
+      await prisma.asr_jobs.createMany({
+        data: [
+          {
+            attempt_id: attemptId,
+            attempt_speaking_response_id: response.id,
+            speaking_part: response.speaking_part,
+            provider: "WHISPER",
+            status: grading_job_status.PENDING,
+            dedupe_key: dedupeKey,
+            bull_job_id: dedupeKey,
+            request_json: {
+              attemptId,
+              speakingResponseId: response.id,
+              speakingPart: response.speaking_part,
+            } as Prisma.InputJsonValue,
+          },
+        ],
+        skipDuplicates: true,
+      });
+
+      const asrJob = await prisma.asr_jobs.findFirst({
+        where: {
+          dedupe_key: dedupeKey,
+        },
+        orderBy: {
+          created_at: "desc",
+        },
+      });
+
+      if (!asrJob) {
+        throw new Error(`Cannot create ASR job for response ${response.id}`);
+      }
+
+      jobs.push(asrJob);
+    }
+
+    return jobs;
+  },
   findSystemConfigRows(keys: string[]) {
     return prisma.system_configs.findMany({
       where: {
@@ -441,6 +491,10 @@ export const attemptRepository = {
       speakingPart: speaking_part_type;
       promptId?: string | null;
       audioUrl: string;
+      audioFileKey: string;
+      audioMimeType: string;
+      audioSizeBytes: number;
+      audioETag?: string | null;
       durationSec?: number | null;
     }>,
   ) {
@@ -455,16 +509,32 @@ export const attemptRepository = {
           },
         });
 
+        const data = {
+          prompt_id: response.promptId ?? null,
+
+          audio_url: response.audioUrl,
+          audio_file_key: response.audioFileKey,
+          audio_mime_type: response.audioMimeType,
+          audio_size_bytes: BigInt(response.audioSizeBytes),
+          audio_etag: response.audioETag ?? null,
+          duration_sec: response.durationSec ?? null,
+
+          transcript: null,
+          transcript_source: transcript_source.WHISPER,
+          whisper_response_json: Prisma.DbNull,
+          asr_status: grading_job_status.PENDING,
+          asr_provider: "WHISPER",
+          asr_error_message: null,
+          asr_started_at: null,
+          asr_finished_at: null,
+        };
+
         if (existing) {
           const updated = await tx.attempt_speaking_responses.update({
             where: {
               id: existing.id,
             },
-            data: {
-              prompt_id: response.promptId ?? null,
-              audio_url: response.audioUrl,
-              duration_sec: response.durationSec ?? null,
-            },
+            data,
           });
 
           results.push(updated);
@@ -473,9 +543,7 @@ export const attemptRepository = {
             data: {
               attempt_id: attemptId,
               speaking_part: response.speakingPart,
-              prompt_id: response.promptId ?? null,
-              audio_url: response.audioUrl,
-              duration_sec: response.durationSec ?? null,
+              ...data,
             },
           });
 
@@ -493,8 +561,11 @@ export const attemptRepository = {
     data: {
       prompt_id?: string | null;
       audio_url?: string | null;
+      audio_file_key?: string | null;
+      audio_mime_type?: string | null;
+      audio_size_bytes?: number | null;
+      audio_etag?: string | null;
       duration_sec?: number | null;
-      transcript?: string | null;
     },
   ) {
     const updateData: Prisma.attempt_speaking_responsesUncheckedUpdateManyInput =
@@ -504,16 +575,46 @@ export const attemptRepository = {
       updateData.prompt_id = data.prompt_id;
     }
 
+    const audioChanged =
+      data.audio_url !== undefined ||
+      data.audio_file_key !== undefined ||
+      data.audio_mime_type !== undefined ||
+      data.audio_size_bytes !== undefined ||
+      data.audio_etag !== undefined;
+
     if (data.audio_url !== undefined && data.audio_url !== null) {
       updateData.audio_url = data.audio_url;
+    }
+
+    if (data.audio_file_key !== undefined && data.audio_file_key !== null) {
+      updateData.audio_file_key = data.audio_file_key;
+    }
+
+    if (data.audio_mime_type !== undefined && data.audio_mime_type !== null) {
+      updateData.audio_mime_type = data.audio_mime_type;
+    }
+
+    if (data.audio_size_bytes !== undefined && data.audio_size_bytes !== null) {
+      updateData.audio_size_bytes = BigInt(data.audio_size_bytes);
+    }
+
+    if (data.audio_etag !== undefined) {
+      updateData.audio_etag = data.audio_etag;
     }
 
     if (data.duration_sec !== undefined) {
       updateData.duration_sec = data.duration_sec;
     }
 
-    if (data.transcript !== undefined) {
-      updateData.transcript = data.transcript;
+    if (audioChanged) {
+      updateData.transcript = null;
+      updateData.transcript_source = transcript_source.WHISPER;
+      updateData.whisper_response_json = Prisma.DbNull;
+      updateData.asr_status = grading_job_status.PENDING;
+      updateData.asr_provider = "WHISPER";
+      updateData.asr_error_message = null;
+      updateData.asr_started_at = null;
+      updateData.asr_finished_at = null;
     }
 
     return prisma.attempt_speaking_responses.updateMany({
@@ -617,33 +718,37 @@ export const attemptRepository = {
     });
   },
 
-  createPendingWritingAiGrading(attemptId: string) {
-    return prisma.ai_gradings.create({
-      data: {
+  async getOrCreatePendingWritingAiGrading(attemptId: string) {
+    await prisma.ai_gradings.createMany({
+      data: [
+        {
+          attempt_id: attemptId,
+          skill: test_type.WRITING,
+          provider: "GEMINI",
+          status: grading_job_status.PENDING,
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    const aiJob = await prisma.ai_gradings.findFirst({
+      where: {
         attempt_id: attemptId,
         skill: test_type.WRITING,
-        status: grading_job_status.PENDING,
+        provider: "GEMINI",
+      },
+      orderBy: {
+        created_at: "desc",
       },
     });
-  },
 
-  createPendingSpeakingAiGrading(attemptId: string) {
-    return prisma.ai_gradings.create({
-      data: {
-        attempt_id: attemptId,
-        skill: test_type.SPEAKING,
-        status: grading_job_status.PENDING,
-      },
-    });
-  },
+    if (!aiJob) {
+      throw new Error(
+        `Cannot create writing AI grading for attempt ${attemptId}`,
+      );
+    }
 
-  createPendingSpeakingAsrJob(attemptId: string) {
-    return prisma.asr_jobs.create({
-      data: {
-        attempt_id: attemptId,
-        status: grading_job_status.PENDING,
-      },
-    });
+    return aiJob;
   },
 
   countPendingTeacherSubmissions(attemptId: string) {

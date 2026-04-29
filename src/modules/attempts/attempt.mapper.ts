@@ -69,10 +69,30 @@ export function mapSpeakingResponse(response: any) {
     attemptId: response.attempt_id,
     speakingPart: response.speaking_part,
     promptId: response.prompt_id,
+
     audioUrl: response.audio_url,
+    audioFileKey: response.audio_file_key,
+    audioMimeType: response.audio_mime_type,
+    audioSizeBytes:
+      response.audio_size_bytes !== null &&
+      response.audio_size_bytes !== undefined
+        ? Number(response.audio_size_bytes)
+        : null,
+    audioETag: response.audio_etag,
+
     transcript: response.transcript,
+    transcriptSource: response.transcript_source,
     durationSec: response.duration_sec,
+
+    asrStatus: response.asr_status,
+    asrProvider: response.asr_provider,
+    asrErrorMessage: response.asr_error_message,
+    asrStartedAt: response.asr_started_at,
+    asrFinishedAt: response.asr_finished_at,
+    hasWhisperResponse: !!response.whisper_response_json,
+
     createdAt: response.created_at,
+    updatedAt: response.updated_at,
   };
 }
 

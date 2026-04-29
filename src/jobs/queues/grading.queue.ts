@@ -8,35 +8,52 @@ export const GRADING_JOB = {
   SPEAKING_AI: "SPEAKING_AI",
 } as const;
 
-export const gradingQueue = new Queue(GRADING_QUEUE_NAME, {
+export type AiGradingJobData = {
+  attemptId: string;
+  aiGradingId?: string;
+};
+
+export const gradingQueue = new Queue<AiGradingJobData>(GRADING_QUEUE_NAME, {
   connection: getBullMQConnection(),
   prefix: getQueuePrefix(),
 });
 
-export async function enqueueWritingAiGrading(attemptId: string) {
-  return gradingQueue.add(
-    GRADING_JOB.WRITING_AI,
-    { attemptId },
-    {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 5000 },
-      removeOnComplete: 200,
-      removeOnFail: 200,
-      jobId: `writing-ai:${attemptId}`,
-    },
-  );
+function normalizeAiGradingPayload(
+  input: string | AiGradingJobData,
+): AiGradingJobData {
+  return typeof input === "string" ? { attemptId: input } : input;
 }
 
-export async function enqueueSpeakingAiGrading(attemptId: string) {
-  return gradingQueue.add(
-    GRADING_JOB.SPEAKING_AI,
-    { attemptId },
-    {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 5000 },
-      removeOnComplete: 200,
-      removeOnFail: 200,
-      jobId: `speaking-ai:${attemptId}`,
+export async function enqueueWritingAiGrading(
+  input: string | AiGradingJobData,
+) {
+  const data = normalizeAiGradingPayload(input);
+
+  return gradingQueue.add(GRADING_JOB.WRITING_AI, data, {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
     },
-  );
+    removeOnComplete: 200,
+    removeOnFail: 200,
+    jobId: `writing-ai:${data.aiGradingId ?? data.attemptId}`,
+  });
+}
+
+export async function enqueueSpeakingAiGrading(
+  input: string | AiGradingJobData,
+) {
+  const data = normalizeAiGradingPayload(input);
+
+  return gradingQueue.add(GRADING_JOB.SPEAKING_AI, data, {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: 200,
+    removeOnFail: 200,
+    jobId: `speaking-ai:${data.aiGradingId ?? data.attemptId}`,
+  });
 }

@@ -3,14 +3,14 @@ import { authenticate } from "../../common/middlewares/auth.middleware";
 import { authorize } from "../../common/middlewares/role.middleware";
 import { validate } from "../../common/middlewares/validate.middleware";
 import { asyncHandler } from "../../common/utils/async-handler";
-import { userController } from "..users/user.controller";
+import { userController } from "../users/user.controller";
 import {
   adminListUsersQuerySchema,
   adminUpdateUserRoleSchema,
   adminUpdateUserSchema,
   adminUpdateUserStatusSchema,
   userIdParamsSchema,
-} from "..users/user.validator";
+} from "../users/user.validator";
 
 const router = Router();
 

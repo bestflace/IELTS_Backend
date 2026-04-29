@@ -16,7 +16,6 @@ const limitSchema = z.preprocess((value) => {
   return Number(value);
 }, z.number().int().positive().max(100).optional());
 
-const positiveIntSchema = z.number().int().positive();
 const positiveIntOptionalSchema = z.preprocess((value) => {
   if (value === undefined || value === null || value === "") return undefined;
   return Number(value);
@@ -40,6 +39,32 @@ const jsonValueSchema: z.ZodTypeAny = z.lazy(() =>
     z.record(z.string(), jsonValueSchema),
   ]),
 );
+
+const fileKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1024)
+  .refine((value) => value.startsWith("speaking-audio/"), {
+    message: "Speaking audio fileKey must be inside speaking-audio folder",
+  });
+
+const audioMimeTypeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(150)
+  .refine((value) => value.toLowerCase().startsWith("audio/"), {
+    message: "audioMimeType must be an audio content type",
+  });
+
+const audioSizeBytesSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(25 * 1024 * 1024);
+
+const eTagSchema = z.string().trim().min(1).max(255);
 
 export const attemptIdParamsSchema = z.object({
   id: attemptIdSchema,
@@ -113,7 +138,13 @@ export const saveSpeakingResponsesSchema = z.object({
       z.object({
         speakingPart: z.enum(["PART_1", "PART_2", "PART_3"]),
         promptId: promptIdSchema.nullable().optional(),
+
         audioUrl: z.string().trim().url(),
+        audioFileKey: fileKeySchema,
+        audioMimeType: audioMimeTypeSchema,
+        audioSizeBytes: audioSizeBytesSchema,
+        audioETag: eTagSchema.nullable().optional(),
+
         durationSec: nullablePositiveIntOptionalSchema,
       }),
     )
@@ -128,9 +159,14 @@ export const speakingPartParamsSchema = z.object({
 export const patchSpeakingResponseSchema = z
   .object({
     promptId: promptIdSchema.nullable().optional(),
+
     audioUrl: z.string().trim().url().nullable().optional(),
+    audioFileKey: fileKeySchema.nullable().optional(),
+    audioMimeType: audioMimeTypeSchema.nullable().optional(),
+    audioSizeBytes: audioSizeBytesSchema.nullable().optional(),
+    audioETag: eTagSchema.nullable().optional(),
+
     durationSec: nullablePositiveIntOptionalSchema,
-    transcript: z.string().trim().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field is required",
@@ -140,6 +176,7 @@ export const patchSpeakingResponseSchema = z
 export const submitAttemptSchema = z.object({
   force: z.boolean().optional(),
 });
+
 export const gradingStatusParamsSchema = z.object({
   id: attemptIdSchema,
 });

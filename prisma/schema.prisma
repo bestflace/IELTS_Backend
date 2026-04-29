@@ -19,33 +19,43 @@ model ai_gradings {
   normalized_result_json Json?
   error_message          String?
   retry_count            Int                @default(0)
+  bull_job_id            String?            @unique(map: "uq_ai_gradings_bull_job_id", where: raw("(bull_job_id IS NOT NULL)"))
+  dedupe_key             String?            @unique(map: "uq_ai_gradings_dedupe_key", where: raw("(dedupe_key IS NOT NULL)"))
   started_at             DateTime?          @db.Timestamptz(6)
   finished_at            DateTime?          @db.Timestamptz(6)
   created_at             DateTime           @default(now()) @db.Timestamptz(6)
   updated_at             DateTime           @default(now()) @db.Timestamptz(6)
   attempts               attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@unique([attempt_id, skill, provider], map: "uq_ai_gradings_attempt_skill_provider")
   @@index([attempt_id], map: "idx_ai_gradings_attempt")
   @@index([status, created_at], map: "idx_ai_gradings_status")
 }
 
 model asr_jobs {
-  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  attempt_id    String             @db.VarChar(32)
-  provider      String             @default("WHISPER") @db.VarChar(50)
-  status        grading_job_status @default(PENDING)
-  request_json  Json?
-  response_json Json?
-  error_message String?
-  retry_count   Int                @default(0)
-  started_at    DateTime?          @db.Timestamptz(6)
-  finished_at   DateTime?          @db.Timestamptz(6)
-  created_at    DateTime           @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime           @default(now()) @db.Timestamptz(6)
-  attempts      attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                           String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id                   String                     @db.VarChar(32)
+  attempt_speaking_response_id String                     @db.Uuid
+  speaking_part                speaking_part_type
+  provider                     String                     @default("WHISPER") @db.VarChar(50)
+  status                       grading_job_status         @default(PENDING)
+  request_json                 Json?
+  response_json                Json?
+  error_message                String?
+  retry_count                  Int                        @default(0)
+  bull_job_id                  String?                    @unique(map: "uq_asr_jobs_bull_job_id", where: raw("(bull_job_id IS NOT NULL)"))
+  dedupe_key                   String?                    @unique(map: "uq_asr_jobs_dedupe_key", where: raw("(dedupe_key IS NOT NULL)"))
+  started_at                   DateTime?                  @db.Timestamptz(6)
+  finished_at                  DateTime?                  @db.Timestamptz(6)
+  created_at                   DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                   @default(now()) @db.Timestamptz(6)
+  attempts                     attempts                   @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  attempt_speaking_responses   attempt_speaking_responses @relation(fields: [attempt_speaking_response_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@unique([attempt_speaking_response_id, provider], map: "uq_asr_jobs_response_provider")
   @@index([attempt_id], map: "idx_asr_jobs_attempt")
   @@index([status, created_at], map: "idx_asr_jobs_status")
+  @@index([attempt_speaking_response_id], map: "idx_asr_jobs_response")
 }
 
 model attempt_comments {
@@ -65,12 +75,14 @@ model attempt_comments {
 
   @@index([attempt_id, created_at], map: "idx_attempt_comments_attempt")
   @@index([parent_id], map: "idx_attempt_comments_parent")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_attempt_comments_user")
 }
 
 model attempt_question_answers {
   id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   attempt_id  String     @db.VarChar(32)
   question_id String?    @db.Uuid
+  section_key String?    @db.VarChar(80)
   q_no        Int?
   answer_json Json       @default("{}")
   is_flagged  Boolean    @default(false)
@@ -81,12 +93,14 @@ model attempt_question_answers {
 
   @@unique([attempt_id, question_id], map: "uq_attempt_question")
   @@index([attempt_id, saved_at(sort: Desc)], map: "idx_attempt_question_answers_attempt")
+  @@index([attempt_id, section_key, q_no], map: "idx_attempt_question_answers_section_qno")
 }
 
 model attempt_result_details {
   id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   attempt_id       String     @db.VarChar(32)
   question_id      String?    @db.Uuid
+  section_key      String?    @db.VarChar(80)
   q_no             Int?
   user_answer_json Json?
   correct_json     Json?
@@ -99,6 +113,7 @@ model attempt_result_details {
 
   @@unique([attempt_id, question_id], map: "uq_attempt_result_detail")
   @@index([attempt_id], map: "idx_attempt_result_details_attempt")
+  @@index([attempt_id, section_key, q_no], map: "idx_attempt_result_details_section_qno")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -122,19 +137,36 @@ model attempt_snapshots {
 }
 
 model attempt_speaking_responses {
-  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  attempt_id       String             @db.VarChar(32)
-  speaking_part    speaking_part_type
-  prompt_id        String?            @db.Uuid
-  audio_url        String
-  transcript       String?
-  duration_sec     Int?
-  created_at       DateTime           @default(now()) @db.Timestamptz(6)
-  attempts         attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  speaking_prompts speaking_prompts?  @relation(fields: [prompt_id], references: [id], onUpdate: NoAction)
+  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attempt_id            String             @db.VarChar(32)
+  speaking_part         speaking_part_type
+  prompt_id             String?            @db.Uuid
+  audio_url             String
+  audio_file_id         String?            @db.Uuid
+  audio_file_key        String?
+  audio_mime_type       String?            @db.VarChar(150)
+  audio_size_bytes      BigInt?
+  audio_etag            String?
+  transcript            String?
+  transcript_source     transcript_source  @default(WHISPER)
+  whisper_response_json Json?
+  duration_sec          Int?
+  asr_status            grading_job_status @default(PENDING)
+  asr_provider          String             @default("WHISPER") @db.VarChar(50)
+  asr_error_message     String?
+  asr_started_at        DateTime?          @db.Timestamptz(6)
+  asr_finished_at       DateTime?          @db.Timestamptz(6)
+  created_at            DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime           @default(now()) @db.Timestamptz(6)
+  asr_jobs              asr_jobs[]
+  attempts              attempts           @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  uploaded_files        uploaded_files?    @relation(fields: [audio_file_id], references: [id], onUpdate: NoAction)
+  speaking_prompts      speaking_prompts?  @relation(fields: [prompt_id], references: [id], onUpdate: NoAction)
 
   @@unique([attempt_id, speaking_part], map: "uq_attempt_speaking_part")
   @@index([attempt_id], map: "idx_attempt_speaking_attempt")
+  @@index([attempt_id, asr_status], map: "idx_attempt_speaking_asr_status")
+  @@index([audio_file_id], map: "idx_attempt_speaking_audio_file")
 }
 
 model attempt_writing_responses {
@@ -183,6 +215,7 @@ model attempts {
   @@index([status], map: "idx_attempts_status")
   @@index([test_id], map: "idx_attempts_test")
   @@index([user_id, created_at(sort: Desc)], map: "idx_attempts_user")
+  @@index([expires_at], map: "idx_attempts_expires_at")
 }
 
 model auth_tokens {
@@ -210,40 +243,45 @@ model blog_tags {
 }
 
 model blogs {
-  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title            String      @db.VarChar(255)
-  slug             String      @unique @db.VarChar(255)
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title            String          @db.VarChar(255)
+  slug             String          @unique @db.VarChar(255)
   excerpt          String?
   content_markdown String
   cover_image_url  String?
-  status           blog_status @default(DRAFT)
-  published_at     DateTime?   @db.Timestamptz(6)
-  created_by       String?     @db.Uuid
-  created_at       DateTime    @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime    @default(now()) @db.Timestamptz(6)
+  cover_file_id    String?         @db.Uuid
+  status           blog_status     @default(DRAFT)
+  published_at     DateTime?       @db.Timestamptz(6)
+  created_by       String?         @db.Uuid
+  created_at       DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime        @default(now()) @db.Timestamptz(6)
   blog_tags        blog_tags[]
-  users            users?      @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  uploaded_files   uploaded_files? @relation(fields: [cover_file_id], references: [id], onUpdate: NoAction)
+  users            users?          @relation(fields: [created_by], references: [id], onUpdate: NoAction)
 
   @@index([published_at(sort: Desc)], map: "idx_blogs_published_at")
   @@index([status], map: "idx_blogs_status")
 }
 
 model import_jobs {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  type          import_type
-  status        import_status @default(PENDING)
-  file_url      String
-  uploaded_by   String?       @db.Uuid
-  request_json  Json?
-  result_json   Json?
-  error_message String?
-  started_at    DateTime?     @db.Timestamptz(6)
-  finished_at   DateTime?     @db.Timestamptz(6)
-  created_at    DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime      @default(now()) @db.Timestamptz(6)
-  users         users?        @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type           import_type
+  status         import_status   @default(PENDING)
+  file_url       String
+  file_id        String?         @db.Uuid
+  uploaded_by    String?         @db.Uuid
+  request_json   Json?
+  result_json    Json?
+  error_message  String?
+  started_at     DateTime?       @db.Timestamptz(6)
+  finished_at    DateTime?       @db.Timestamptz(6)
+  created_at     DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime        @default(now()) @db.Timestamptz(6)
+  uploaded_files uploaded_files? @relation(fields: [file_id], references: [id], onUpdate: NoAction)
+  users          users?          @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
 
   @@index([status, created_at(sort: Desc)], map: "idx_import_jobs_status")
+  @@index([uploaded_by, created_at(sort: Desc)], map: "idx_import_jobs_uploaded_by")
 }
 
 model listening_set_tags {
@@ -261,6 +299,8 @@ model listening_sets {
   title              String               @db.VarChar(255)
   transcript_text    String?
   audio_url          String?
+  audio_file_id      String?              @db.Uuid
+  audio_file_key     String?
   audio_source       audio_source_type?
   level              Decimal?             @db.Decimal(2, 1)
   status             publish_status       @default(DRAFT)
@@ -268,6 +308,7 @@ model listening_sets {
   created_at         DateTime             @default(now()) @db.Timestamptz(6)
   updated_at         DateTime             @default(now()) @db.Timestamptz(6)
   listening_set_tags listening_set_tags[]
+  uploaded_files     uploaded_files?      @relation(fields: [audio_file_id], references: [id], onUpdate: NoAction)
   users              users?               @relation(fields: [created_by], references: [id], onUpdate: NoAction)
   questions          questions[]
   test_sections      test_sections[]
@@ -482,6 +523,7 @@ model teacher_submissions {
   @@unique([attempt_id, skill], map: "uq_teacher_submission_attempt_skill")
   @@index([claimed_by], map: "idx_teacher_submissions_claimed_by")
   @@index([status, created_at], map: "idx_teacher_submissions_status")
+  @@index([skill, status, created_at], map: "idx_teacher_submissions_skill_status")
 }
 
 model test_publish_events {
@@ -545,7 +587,7 @@ model tests {
   test_tags           test_tags[]
   users               users?                @relation(fields: [created_by], references: [id], onUpdate: NoAction)
 
-  @@index([published_at], map: "idx_tests_published_at")
+  @@index([published_at(sort: Desc)], map: "idx_tests_published_at")
   @@index([status], map: "idx_tests_status")
   @@index([type], map: "idx_tests_type")
 }
@@ -576,6 +618,7 @@ model users {
   teacher_submissions teacher_submissions[]
   test_publish_events test_publish_events[]
   tests               tests[]
+  uploaded_files      uploaded_files[]
   writing_tasks       writing_tasks[]
 
   @@index([role], map: "idx_users_role")
@@ -593,25 +636,60 @@ model writing_task_tags {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model writing_tasks {
-  id                        String                      @id @db.VarChar(32)
-  task_no                   Int?
-  title                     String                      @db.VarChar(255)
-  prompt_text               String
-  chart_url                 String?
-  image_url                 String?
-  level                     Decimal?                    @db.Decimal(2, 1)
-  status                    publish_status              @default(DRAFT)
-  created_by                String?                     @db.Uuid
-  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
-  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
-  attempt_writing_responses attempt_writing_responses[]
-  test_sections             test_sections[]
-  writing_task_tags         writing_task_tags[]
-  users                     users?                      @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  id                                                         String                      @id @db.VarChar(32)
+  task_no                                                    Int?
+  title                                                      String                      @db.VarChar(255)
+  prompt_text                                                String
+  chart_url                                                  String?
+  chart_file_id                                              String?                     @db.Uuid
+  image_url                                                  String?
+  image_file_id                                              String?                     @db.Uuid
+  level                                                      Decimal?                    @db.Decimal(2, 1)
+  status                                                     publish_status              @default(DRAFT)
+  created_by                                                 String?                     @db.Uuid
+  created_at                                                 DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                                                 DateTime                    @default(now()) @db.Timestamptz(6)
+  attempt_writing_responses                                  attempt_writing_responses[]
+  test_sections                                              test_sections[]
+  writing_task_tags                                          writing_task_tags[]
+  uploaded_files_writing_tasks_chart_file_idTouploaded_files uploaded_files?             @relation("writing_tasks_chart_file_idTouploaded_files", fields: [chart_file_id], references: [id], onUpdate: NoAction)
+  users                                                      users?                      @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  uploaded_files_writing_tasks_image_file_idTouploaded_files uploaded_files?             @relation("writing_tasks_image_file_idTouploaded_files", fields: [image_file_id], references: [id], onUpdate: NoAction)
 
   @@index([level], map: "idx_writing_tasks_level")
   @@index([status], map: "idx_writing_tasks_status")
   @@index([task_no], map: "idx_writing_tasks_task_no")
+}
+
+model uploaded_files {
+  id                                                        String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  uploaded_by                                               String?                      @db.Uuid
+  purpose                                                   uploaded_file_purpose        @default(OTHER)
+  status                                                    uploaded_file_status         @default(PENDING)
+  bucket                                                    String?                      @db.VarChar(255)
+  file_key                                                  String                       @unique
+  file_url                                                  String
+  original_name                                             String?                      @db.VarChar(255)
+  content_type                                              String?                      @db.VarChar(150)
+  size_bytes                                                BigInt?
+  etag                                                      String?
+  checksum_sha256                                           String?
+  metadata_json                                             Json                         @default("{}")
+  completed_at                                              DateTime?                    @db.Timestamptz(6)
+  deleted_at                                                DateTime?                    @db.Timestamptz(6)
+  created_at                                                DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                                                DateTime                     @default(now()) @db.Timestamptz(6)
+  attempt_speaking_responses                                attempt_speaking_responses[]
+  blogs                                                     blogs[]
+  import_jobs                                               import_jobs[]
+  listening_sets                                            listening_sets[]
+  users                                                     users?                       @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
+  writing_tasks_writing_tasks_chart_file_idTouploaded_files writing_tasks[]              @relation("writing_tasks_chart_file_idTouploaded_files")
+  writing_tasks_writing_tasks_image_file_idTouploaded_files writing_tasks[]              @relation("writing_tasks_image_file_idTouploaded_files")
+
+  @@index([purpose, created_at(sort: Desc)], map: "idx_uploaded_files_purpose")
+  @@index([status, created_at(sort: Desc)], map: "idx_uploaded_files_status")
+  @@index([uploaded_by, created_at(sort: Desc)], map: "idx_uploaded_files_uploaded_by")
 }
 
 enum attempt_status {
@@ -746,4 +824,26 @@ enum user_status {
   ACTIVE
   BLOCKED
   PENDING
+}
+
+enum transcript_source {
+  WHISPER
+  MANUAL
+  TEACHER_EDIT
+}
+
+enum uploaded_file_purpose {
+  AVATAR
+  SPEAKING_AUDIO
+  LISTENING_AUDIO
+  WRITING_IMAGE
+  BLOG_IMAGE
+  IMPORT_EXCEL
+  OTHER
+}
+
+enum uploaded_file_status {
+  PENDING
+  COMPLETED
+  DELETED
 }

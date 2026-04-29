@@ -16,6 +16,11 @@
     "worker:asr": "ts-node-dev --respawn --transpile-only src/jobs/workers/asr.worker.ts",
     "worker:grading": "ts-node-dev --respawn --transpile-only src/jobs/workers/grading.worker.ts",
     "worker:notification": "ts-node-dev --respawn --transpile-only src/jobs/workers/notification.worker.ts",
+    "worker:all:prod": "node dist/jobs/workers/index.js",
+    "worker:import:prod": "node dist/jobs/workers/import.worker.js",
+    "worker:asr:prod": "node dist/jobs/workers/asr.worker.js",
+    "worker:grading:prod": "node dist/jobs/workers/grading.worker.js",
+    "worker:notification:prod": "node dist/jobs/workers/notification.worker.js",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "db:seed": "ts-node prisma/seed.ts"

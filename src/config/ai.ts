@@ -1,14 +1,40 @@
-type GeminiGenerateResult = {
-  raw: unknown;
-  text: string;
-};
-
 function getRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
+
   if (!value) {
     throw new Error(`${name} is not configured`);
   }
+
   return value;
+}
+
+function getTimeoutMs(envName: string, fallback: number) {
+  const raw = process.env[envName]?.trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function getGeminiModel() {
@@ -26,8 +52,13 @@ export async function generateGeminiJson<T>(params: {
 }): Promise<{ data: T; raw: unknown }> {
   const apiKey = getRequiredEnv("GEMINI_API_KEY");
   const model = getGeminiModel();
+  const timeoutMs = getTimeoutMs("GEMINI_TIMEOUT_MS", 90_000);
 
-  const response = await fetch(
+  const prompt = params.schemaHint
+    ? `${params.prompt}\n\nSchema hint:\n${params.schemaHint}`
+    : params.prompt;
+
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
@@ -41,7 +72,7 @@ export async function generateGeminiJson<T>(params: {
         contents: [
           {
             role: "user",
-            parts: [{ text: params.prompt }],
+            parts: [{ text: prompt }],
           },
         ],
         generationConfig: {
@@ -49,6 +80,7 @@ export async function generateGeminiJson<T>(params: {
         },
       }),
     },
+    timeoutMs,
   );
 
   if (!response.ok) {
@@ -80,20 +112,29 @@ export async function transcribeWithWhisper(params: {
   audioBuffer: Buffer;
   filename: string;
   mimeType: string;
+  language?: string;
 }): Promise<{ text: string; raw: unknown }> {
   const apiKey = getRequiredEnv("WHISPER_API_KEY");
   const model = getWhisperModel();
+  const timeoutMs = getTimeoutMs("WHISPER_TIMEOUT_MS", 120_000);
 
   const form = new FormData();
+
   form.append("model", model);
   form.append(
     "file",
-    new Blob([new Uint8Array(params.audioBuffer)], { type: params.mimeType }),
+    new Blob([new Uint8Array(params.audioBuffer)], {
+      type: params.mimeType,
+    }),
     params.filename,
   );
-  form.append("response_format", "json");
+  form.append("response_format", "verbose_json");
 
-  const response = await fetch(
+  if (params.language) {
+    form.append("language", params.language);
+  }
+
+  const response = await fetchWithTimeout(
     "https://api.openai.com/v1/audio/transcriptions",
     {
       method: "POST",
@@ -102,6 +143,7 @@ export async function transcribeWithWhisper(params: {
       },
       body: form,
     },
+    timeoutMs,
   );
 
   if (!response.ok) {

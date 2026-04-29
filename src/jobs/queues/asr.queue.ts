@@ -7,21 +7,26 @@ export const ASR_JOB = {
   SPEAKING_TRANSCRIBE: "SPEAKING_TRANSCRIBE",
 } as const;
 
-export const asrQueue = new Queue(ASR_QUEUE_NAME, {
+export type SpeakingAsrJobData = {
+  attemptId: string;
+  asrJobId: string;
+  speakingResponseId: string;
+};
+
+export const asrQueue = new Queue<SpeakingAsrJobData>(ASR_QUEUE_NAME, {
   connection: getBullMQConnection(),
   prefix: getQueuePrefix(),
 });
 
-export async function enqueueSpeakingAsr(attemptId: string) {
-  return asrQueue.add(
-    ASR_JOB.SPEAKING_TRANSCRIBE,
-    { attemptId },
-    {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 5000 },
-      removeOnComplete: 200,
-      removeOnFail: 200,
-      jobId: `speaking-asr:${attemptId}`,
+export async function enqueueSpeakingAsr(data: SpeakingAsrJobData) {
+  return asrQueue.add(ASR_JOB.SPEAKING_TRANSCRIBE, data, {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
     },
-  );
+    removeOnComplete: 200,
+    removeOnFail: 200,
+    jobId: `speaking-asr:${data.speakingResponseId}`,
+  });
 }
