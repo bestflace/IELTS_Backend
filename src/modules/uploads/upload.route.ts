@@ -4,13 +4,20 @@ import { validate } from "../../common/middlewares/validate.middleware";
 import { asyncHandler } from "../../common/utils/async-handler";
 import { uploadController } from "./upload.controller";
 import {
+  cloudinaryUploadSchema,
   completeUploadSchema,
   deleteUploadSchema,
   presignUploadSchema,
 } from "./upload.validator";
+import multer from "multer";
 
 const router = Router();
-
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+  },
+});
 /**
  * @swagger
  * tags:
@@ -56,6 +63,13 @@ router.post(
   asyncHandler(uploadController.completeUpload),
 );
 
+router.post(
+  "/uploads/cloudinary",
+  authenticate,
+  memoryUpload.single("file"),
+  validate({ body: cloudinaryUploadSchema }),
+  asyncHandler(uploadController.uploadCloudinary),
+);
 /**
  * @swagger
  * /uploads:

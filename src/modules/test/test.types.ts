@@ -25,7 +25,6 @@ export type TestSectionInput = {
 };
 
 export type CreateTestBody = {
-  id: string;
   type: "READING" | "LISTENING" | "WRITING" | "SPEAKING" | "FULL";
   title: string;
   level?: number | null;

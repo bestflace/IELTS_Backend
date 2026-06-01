@@ -613,19 +613,21 @@ export const testService = {
   },
 
   async createTest(adminUserId: string, body: CreateTestBody) {
-    const existing = await testRepository.findTestById(body.id);
-
-    if (existing) {
-      throw new ConflictError(MESSAGE.TEST.ID_EXISTS);
-    }
-
     const tagIds = await assertTagsExist(body.tagIds);
     const sections = body.sections ?? [];
 
     await validateSectionsForDraft(body.type as test_type, sections);
 
+    let generatedId = generateTestId();
+    let existing = await testRepository.findTestById(generatedId);
+
+    while (existing) {
+      generatedId = generateTestId();
+      existing = await testRepository.findTestById(generatedId);
+    }
+
     const created = await testRepository.createTest({
-      id: body.id,
+      id: generatedId,
       type: body.type as test_type,
       title: normalizeText(body.title),
       level: body.level ?? null,
@@ -645,9 +647,12 @@ export const testService = {
     });
 
     if (body.publishNow) {
-      await validateSectionsForPublish(body.id);
-      const published = await testRepository.publishTest(body.id, adminUserId);
-      await enqueueTestPublishedNotification(body.id);
+      await validateSectionsForPublish(generatedId);
+      const published = await testRepository.publishTest(
+        generatedId,
+        adminUserId,
+      );
+      await enqueueTestPublishedNotification(generatedId);
       return mapAdminTestDetail(published!);
     }
 

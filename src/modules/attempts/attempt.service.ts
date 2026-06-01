@@ -345,13 +345,52 @@ function sectionTypeForMode(mode: test_type) {
   if (mode === test_type.SPEAKING) return "SPEAKING_SET";
   return null;
 }
+function sectionTypeFromAttemptMode(mode: string) {
+  const map: Record<string, string> = {
+    READING: "READING_SET",
+    LISTENING: "LISTENING_SET",
+    WRITING: "WRITING_TASK",
+    SPEAKING: "SPEAKING_SET",
+  };
 
+  return map[mode];
+}
+
+function filterSnapshotForAttemptSession<T extends { sections?: any[] }>(
+  snapshot: T,
+  mode: string,
+  partLabel?: string | null,
+): T {
+  if (!snapshot?.sections || !Array.isArray(snapshot.sections)) {
+    return snapshot;
+  }
+
+  const expectedSectionType = sectionTypeFromAttemptMode(mode);
+
+  const filteredSections = snapshot.sections.filter((section) => {
+    const matchMode =
+      mode === "FULL" || !expectedSectionType
+        ? true
+        : section.sectionType === expectedSectionType;
+
+    const matchPart = partLabel ? section.partLabel === partLabel : true;
+
+    return matchMode && matchPart;
+  });
+
+  return {
+    ...snapshot,
+    sections: filteredSections,
+  };
+}
 function getRelevantSections(
   snapshot: any,
   mode: test_type,
   partLabel?: string | null,
 ) {
-  let sections = snapshot.sections as any[];
+  let sections = Array.isArray(snapshot.sections)
+    ? (snapshot.sections as any[])
+    : [];
 
   const singleSectionType = sectionTypeForMode(mode);
 
@@ -362,17 +401,21 @@ function getRelevantSections(
   }
 
   if (partLabel) {
-    const filtered = sections.filter(
-      (section) => section.partLabel === partLabel,
-    );
-    if (filtered.length > 0) {
-      sections = filtered;
-    }
+    sections = sections.filter((section) => section.partLabel === partLabel);
   }
 
   return sections;
 }
-
+function filterSnapshotForAttempt(
+  snapshot: any,
+  mode: test_type,
+  partLabel?: string | null,
+) {
+  return {
+    ...snapshot,
+    sections: getRelevantSections(snapshot, mode, partLabel),
+  };
+}
 function collectQuestionIds(
   snapshot: any,
   mode: test_type,
@@ -689,6 +732,19 @@ export const attemptService = {
     }
 
     const snapshot = buildSnapshot(test);
+    if (body.partLabel) {
+      const matchedSections = getRelevantSections(
+        snapshot,
+        mode,
+        body.partLabel,
+      );
+
+      if (matchedSections.length === 0) {
+        throw new BadRequestError(
+          "Phần luyện tập không tồn tại trong đề thi này.",
+        );
+      }
+    }
     const attemptId = generateAttemptId();
     const expiresAt = new Date(Date.now() + chosenTime * 1000);
 
@@ -702,7 +758,6 @@ export const attemptService = {
       expires_at: expiresAt,
       snapshot: snapshot as Prisma.InputJsonValue,
     });
-
     return {
       id: created.id,
       userId: created.user_id,
@@ -794,7 +849,13 @@ export const attemptService = {
       throw new NotFoundError(MESSAGE.ATTEMPT.SNAPSHOT_NOT_FOUND);
     }
 
-    const sanitized = sanitizeSnapshotForSession(snapshot);
+    const filteredSnapshot = filterSnapshotForAttempt(
+      snapshot,
+      attempt.mode,
+      attempt.part_label,
+    );
+
+    const sanitized = sanitizeSnapshotForSession(filteredSnapshot);
 
     return {
       attempt: {
@@ -1375,7 +1436,11 @@ export const attemptService = {
     if (!snapshot) {
       throw new NotFoundError(MESSAGE.ATTEMPT.SNAPSHOT_NOT_FOUND);
     }
-
+    const filteredSnapshot = filterSnapshotForAttempt(
+      snapshot,
+      attempt.mode,
+      attempt.part_label,
+    );
     return {
       attempt: {
         id: attempt.id,
@@ -1386,7 +1451,7 @@ export const attemptService = {
         submittedAt: attempt.submitted_at,
         gradedAt: attempt.graded_at,
       },
-      snapshot: sanitizeSnapshotForSession(snapshot),
+      snapshot: filteredSnapshot,
       questionAnswers: attempt.attempt_question_answers.map(mapQuestionAnswer),
       writingResponses:
         attempt.attempt_writing_responses.map(mapWritingResponse),

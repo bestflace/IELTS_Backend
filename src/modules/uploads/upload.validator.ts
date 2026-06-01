@@ -7,7 +7,9 @@ const folderSchema = z.enum([
   "avatars",
   "blogs",
 ]);
-
+export const cloudinaryUploadSchema = z.object({
+  folder: folderSchema,
+});
 export const presignUploadSchema = z.object({
   folder: folderSchema,
   filename: z.string().trim().min(1).max(255),

@@ -156,7 +156,6 @@ export const testSectionIdParamsSchema = z.object({
 });
 
 export const createTestSchema = z.object({
-  id: testIdSchema,
   type: testTypeSchema,
   title: z.string().trim().min(1).max(255),
   level: levelNullableSchema,

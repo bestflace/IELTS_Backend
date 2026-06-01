@@ -16,6 +16,8 @@ import { MESSAGE } from "../../common/constants/message.constant";
 import { BadRequestError } from "../../common/errors/bad-request.error";
 import { ForbiddenError } from "../../common/errors/forbidden.error";
 import { NotFoundError } from "../../common/errors/not-found.error";
+import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
 import {
   CompleteUploadBody,
   DeleteUploadBody,
@@ -36,7 +38,40 @@ type FolderPolicy = {
   allowedContentTypes: string[];
   maxSizeMb: number;
 };
+function isCloudinaryConfigured() {
+  return Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME?.trim() &&
+    process.env.CLOUDINARY_API_KEY?.trim() &&
+    process.env.CLOUDINARY_API_SECRET?.trim(),
+  );
+}
 
+function assertCloudinaryConfigured() {
+  if (!isCloudinaryConfigured()) {
+    throw new BadRequestError("Cloudinary storage is not configured");
+  }
+
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME!.trim(),
+    api_key: process.env.CLOUDINARY_API_KEY!.trim(),
+    api_secret: process.env.CLOUDINARY_API_SECRET!.trim(),
+    secure: true,
+  });
+}
+
+function getCloudinaryResourceType(contentType: string) {
+  const type = contentType.toLowerCase();
+
+  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("audio/")) return "video";
+  if (type.startsWith("video/")) return "video";
+
+  return "raw";
+}
+
+function bufferToDataUri(buffer: Buffer, contentType: string) {
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
 const FOLDER_POLICIES: Record<UploadFolder, FolderPolicy> = {
   "speaking-audio": {
     roles: ["USER", "TEACHER", "ADMIN"],
@@ -311,7 +346,65 @@ export const uploadService = {
       throw new BadRequestError(MESSAGE.UPLOAD.FILE_NOT_FOUND);
     }
   },
+  async uploadToCloudinary(
+    userId: string,
+    role: string,
+    body: {
+      folder: UploadFolder;
+    },
+    file?: Express.Multer.File,
+  ) {
+    assertCloudinaryConfigured();
 
+    if (!file) {
+      throw new BadRequestError("File is required");
+    }
+
+    assertFolderPermission(body.folder, role);
+    assertContentTypeAllowed(body.folder, file.mimetype);
+
+    const policy = FOLDER_POLICIES[body.folder];
+    const maxBytes = policy.maxSizeMb * 1024 * 1024;
+
+    if (file.size <= 0) {
+      throw new BadRequestError(MESSAGE.UPLOAD.EMPTY_UPLOADED_FILE);
+    }
+
+    if (file.size > maxBytes) {
+      throw new BadRequestError(
+        `File is too large. Maximum size is ${policy.maxSizeMb}MB`,
+      );
+    }
+
+    const safeFilename = sanitizeFilename(file.originalname || "file");
+    const ext = path.extname(safeFilename);
+    const basename = path.basename(safeFilename, ext);
+    const randomId = crypto.randomBytes(6).toString("hex");
+
+    const cloudinaryFolder = `ieltsbf/${body.folder}/${userId}`;
+    const publicId = `${Date.now()}-${randomId}-${basename}`;
+    const resourceType = getCloudinaryResourceType(file.mimetype);
+
+    const dataUri = bufferToDataUri(file.buffer, file.mimetype);
+
+    const result = await cloudinary.uploader.upload(dataUri, {
+      folder: cloudinaryFolder,
+      public_id: publicId,
+      resource_type: resourceType as "image" | "video" | "raw" | "auto",
+      overwrite: false,
+    });
+
+    return {
+      folder: body.folder,
+      fileKey: result.public_id,
+      fileUrl: result.secure_url,
+      contentType: file.mimetype,
+      size: file.size,
+      provider: "cloudinary",
+      resourceType,
+      originalFilename: file.originalname,
+    };
+  },
   async deleteUpload(userId: string, role: string, body: DeleteUploadBody) {
     assertR2Configured();
 
