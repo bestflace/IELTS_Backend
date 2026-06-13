@@ -1,5 +1,8 @@
 import { Router } from "express";
+import multer from "multer";
+
 import { authenticate } from "../../common/middlewares/auth.middleware";
+import { authorize } from "../../common/middlewares/role.middleware";
 import { validate } from "../../common/middlewares/validate.middleware";
 import { asyncHandler } from "../../common/utils/async-handler";
 import { uploadController } from "./upload.controller";
@@ -8,16 +11,19 @@ import {
   completeUploadSchema,
   deleteUploadSchema,
   presignUploadSchema,
+  uploadIdParamsSchema,
+  uploadListQuerySchema,
 } from "./upload.validator";
-import multer from "multer";
 
 const router = Router();
+
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 25 * 1024 * 1024,
+    fileSize: 50 * 1024 * 1024,
   },
 });
+
 /**
  * @swagger
  * tags:
@@ -25,18 +31,22 @@ const memoryUpload = multer({
  *     description: Upload and media APIs
  */
 
-/**
- * @swagger
- * /uploads/presign:
- *   post:
- *     summary: Create presigned upload URL
- *     tags: [Uploads]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Create upload presigned URL successfully
- */
+router.get(
+  "/admin/uploads",
+  authenticate,
+  authorize("ADMIN"),
+  validate({ query: uploadListQuerySchema }),
+  asyncHandler(uploadController.getUploads),
+);
+
+router.get(
+  "/admin/uploads/:id",
+  authenticate,
+  authorize("ADMIN"),
+  validate({ params: uploadIdParamsSchema }),
+  asyncHandler(uploadController.getUploadById),
+);
+
 router.post(
   "/uploads/presign",
   authenticate,
@@ -44,18 +54,6 @@ router.post(
   asyncHandler(uploadController.createPresignedUpload),
 );
 
-/**
- * @swagger
- * /uploads/complete:
- *   post:
- *     summary: Complete upload and verify object existence
- *     tags: [Uploads]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Complete upload successfully
- */
 router.post(
   "/uploads/complete",
   authenticate,
@@ -70,18 +68,7 @@ router.post(
   validate({ body: cloudinaryUploadSchema }),
   asyncHandler(uploadController.uploadCloudinary),
 );
-/**
- * @swagger
- * /uploads:
- *   delete:
- *     summary: Delete uploaded file
- *     tags: [Uploads]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Delete uploaded file successfully
- */
+
 router.delete(
   "/uploads",
   authenticate,

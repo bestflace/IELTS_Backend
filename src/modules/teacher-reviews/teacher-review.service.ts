@@ -73,12 +73,22 @@ function mapTeacherSubmissionListItem(item: any) {
     review: item.teacher_reviews
       ? {
           id: item.teacher_reviews.id,
-          overallBand: item.teacher_reviews.overall_band
-            ? Number(item.teacher_reviews.overall_band)
-            : null,
+          overallBand:
+            item.teacher_reviews.overall_band === null ||
+            item.teacher_reviews.overall_band === undefined
+              ? null
+              : Number(item.teacher_reviews.overall_band),
           criteriaJson: item.teacher_reviews.criteria_json,
           summary: item.teacher_reviews.summary,
           actionItemsJson: item.teacher_reviews.action_items_json,
+          reviewedBy: item.teacher_reviews.users
+            ? {
+                id: item.teacher_reviews.users.id,
+                fullName: item.teacher_reviews.users.full_name,
+                email: item.teacher_reviews.users.email,
+                avatarUrl: item.teacher_reviews.users.avatar_url,
+              }
+            : null,
           createdAt: item.teacher_reviews.created_at,
           updatedAt: item.teacher_reviews.updated_at,
         }
@@ -163,12 +173,22 @@ function mapTeacherSubmissionDetail(item: any) {
         review: submission.teacher_reviews
           ? {
               id: submission.teacher_reviews.id,
-              overallBand: submission.teacher_reviews.overall_band
-                ? Number(submission.teacher_reviews.overall_band)
-                : null,
+              overallBand:
+                submission.teacher_reviews.overall_band === null ||
+                submission.teacher_reviews.overall_band === undefined
+                  ? null
+                  : Number(submission.teacher_reviews.overall_band),
               criteriaJson: submission.teacher_reviews.criteria_json,
               summary: submission.teacher_reviews.summary,
               actionItemsJson: submission.teacher_reviews.action_items_json,
+              reviewedBy: submission.teacher_reviews.users
+                ? {
+                    id: submission.teacher_reviews.users.id,
+                    fullName: submission.teacher_reviews.users.full_name,
+                    email: submission.teacher_reviews.users.email,
+                    avatarUrl: submission.teacher_reviews.users.avatar_url,
+                  }
+                : null,
             }
           : null,
       })) ?? [],
@@ -319,13 +339,19 @@ export const teacherReviewService = {
       );
     }
 
-    if (submission.status === teacher_submission_status.REVIEWED) {
-      throw new ConflictError(
-        MESSAGE.TEACHER_REVIEW.SUBMISSION_ALREADY_REVIEWED,
+    const isReviewed = submission.status === teacher_submission_status.REVIEWED;
+
+    if (!isReviewed && submission.claimed_by !== teacherId) {
+      throw new ForbiddenError(
+        MESSAGE.TEACHER_REVIEW.SUBMISSION_NOT_CLAIMED_BY_YOU,
       );
     }
 
-    if (submission.claimed_by !== teacherId) {
+    if (
+      isReviewed &&
+      submission.claimed_by &&
+      submission.claimed_by !== teacherId
+    ) {
       throw new ForbiddenError(
         MESSAGE.TEACHER_REVIEW.SUBMISSION_NOT_CLAIMED_BY_YOU,
       );
@@ -346,12 +372,16 @@ export const teacherReviewService = {
       actionItemsJson: (body.actionItems ?? []).map((item) => item.trim()),
     });
 
-    const reviewed = await teacherReviewRepository.markSubmissionReviewed(
-      submissionId,
-      teacherId,
-    );
+    let reviewed = submission;
 
-    await finalizeReviewFlow(reviewed);
+    if (!isReviewed) {
+      reviewed = await teacherReviewRepository.markSubmissionReviewed(
+        submissionId,
+        teacherId,
+      );
+
+      await finalizeReviewFlow(reviewed);
+    }
 
     const refreshed =
       await teacherReviewRepository.findTeacherSubmissionById(submissionId);
@@ -377,13 +407,19 @@ export const teacherReviewService = {
       );
     }
 
-    if (submission.status === teacher_submission_status.REVIEWED) {
-      throw new ConflictError(
-        MESSAGE.TEACHER_REVIEW.SUBMISSION_ALREADY_REVIEWED,
+    const isReviewed = submission.status === teacher_submission_status.REVIEWED;
+
+    if (!isReviewed && submission.claimed_by !== teacherId) {
+      throw new ForbiddenError(
+        MESSAGE.TEACHER_REVIEW.SUBMISSION_NOT_CLAIMED_BY_YOU,
       );
     }
 
-    if (submission.claimed_by !== teacherId) {
+    if (
+      isReviewed &&
+      submission.claimed_by &&
+      submission.claimed_by !== teacherId
+    ) {
       throw new ForbiddenError(
         MESSAGE.TEACHER_REVIEW.SUBMISSION_NOT_CLAIMED_BY_YOU,
       );
@@ -404,12 +440,16 @@ export const teacherReviewService = {
       actionItemsJson: (body.actionItems ?? []).map((item) => item.trim()),
     });
 
-    const reviewed = await teacherReviewRepository.markSubmissionReviewed(
-      submissionId,
-      teacherId,
-    );
+    let reviewed = submission;
 
-    await finalizeReviewFlow(reviewed);
+    if (!isReviewed) {
+      reviewed = await teacherReviewRepository.markSubmissionReviewed(
+        submissionId,
+        teacherId,
+      );
+
+      await finalizeReviewFlow(reviewed);
+    }
 
     const refreshed =
       await teacherReviewRepository.findTeacherSubmissionById(submissionId);

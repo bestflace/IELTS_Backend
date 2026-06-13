@@ -51,5 +51,11 @@ router.post(
   validate({ params: importIdParamsSchema }),
   asyncHandler(importController.retryImportJob),
 );
-
+router.delete(
+  "/admin/imports/:id",
+  authenticate,
+  authorize("ADMIN"),
+  validate({ params: importIdParamsSchema }),
+  asyncHandler(importController.deleteImportJob),
+);
 export default router;

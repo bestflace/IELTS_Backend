@@ -129,4 +129,22 @@ export const importService = {
 
     return mapImport(retried);
   },
+  async deleteImportJob(id: string) {
+    const item = await importRepository.findImportById(id);
+
+    if (!item) {
+      throw new NotFoundError(MESSAGE.IMPORT.NOT_FOUND);
+    }
+
+    if (item.status === "PROCESSING") {
+      throw new BadRequestError("Không thể xoá import job đang xử lý.");
+    }
+
+    await importRepository.deleteImportJob(id);
+
+    return {
+      id,
+      deleted: true,
+    };
+  },
 };

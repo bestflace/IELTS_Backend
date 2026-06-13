@@ -3,6 +3,40 @@ function toNullableNumber(value: unknown): number | null {
   return Number(value);
 }
 
+type LinkedTestSection = {
+  id: string;
+  test_id: string;
+  part_label: string | null;
+  sort_order: number;
+  time_limit_sec: number | null;
+  tests: {
+    id: string;
+    type: string;
+    title: string;
+    level: unknown;
+    status: string;
+    description: string | null;
+    published_at: Date | null;
+  };
+};
+
+function mapAvailableTests(sections: LinkedTestSection[]) {
+  return sections
+    .filter((section) => section.tests.status === "PUBLISHED")
+    .map((section) => ({
+      testId: section.tests.id,
+      testTitle: section.tests.title,
+      testType: section.tests.type,
+      testLevel: toNullableNumber(section.tests.level),
+      testDescription: section.tests.description,
+      publishedAt: section.tests.published_at,
+      sectionId: section.id,
+      partLabel: section.part_label,
+      sortOrder: section.sort_order,
+      timeLimitSec: section.time_limit_sec,
+    }));
+}
+
 export function mapSpeakingSetList(set: {
   id: string;
   topic: string | null;
@@ -34,6 +68,42 @@ export function mapSpeakingSetList(set: {
       name: item.tags.name,
       slug: item.tags.slug,
     })),
+  };
+}
+
+export function mapPublicSpeakingSetDetail(set: {
+  id: string;
+  topic: string | null;
+  level: unknown;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+  speaking_set_tags: Array<{
+    tags: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>;
+  _count: {
+    speaking_parts: number;
+  };
+  test_sections: LinkedTestSection[];
+}) {
+  return {
+    id: set.id,
+    topic: set.topic,
+    level: toNullableNumber(set.level),
+    status: set.status,
+    createdAt: set.created_at,
+    updatedAt: set.updated_at,
+    partCount: set._count.speaking_parts,
+    tags: set.speaking_set_tags.map((item) => ({
+      id: item.tags.id,
+      name: item.tags.name,
+      slug: item.tags.slug,
+    })),
+    availableTests: mapAvailableTests(set.test_sections),
   };
 }
 

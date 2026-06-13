@@ -11,7 +11,11 @@ import {
   buildPaginationMeta,
   parsePagination,
 } from "../../common/utils/pagination";
-import { mapSpeakingSetDetail, mapSpeakingSetList } from "./speaking.mapper";
+import {
+  mapPublicSpeakingSetDetail,
+  mapSpeakingSetDetail,
+  mapSpeakingSetList,
+} from "./speaking.mapper";
 import { speakingRepository } from "./speaking.repository";
 import {
   CreateSpeakingPartBody,
@@ -212,7 +216,7 @@ export const speakingService = {
       throw new NotFoundError(MESSAGE.SPEAKING.SET_NOT_FOUND);
     }
 
-    return mapSpeakingSetDetail(speakingSet);
+    return mapPublicSpeakingSetDetail(speakingSet);
   },
 
   async getAdminSpeakingSets(query: SpeakingSetListQuery) {

@@ -18,6 +18,10 @@ export const asrQueue = new Queue<SpeakingAsrJobData>(ASR_QUEUE_NAME, {
   prefix: getQueuePrefix(),
 });
 
+function safeJobId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 export async function enqueueSpeakingAsr(data: SpeakingAsrJobData) {
   return asrQueue.add(ASR_JOB.SPEAKING_TRANSCRIBE, data, {
     attempts: 3,
@@ -27,6 +31,6 @@ export async function enqueueSpeakingAsr(data: SpeakingAsrJobData) {
     },
     removeOnComplete: 200,
     removeOnFail: 200,
-    jobId: `speaking-asr:${data.speakingResponseId}`,
+    jobId: safeJobId(`speaking-asr-${data.speakingResponseId}`),
   });
 }

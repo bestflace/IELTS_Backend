@@ -59,7 +59,15 @@ export const commentController = {
       data: result,
     });
   },
+  async getAdminComments(req: Request, res: Response) {
+    const result = await commentService.getAdminComments(req.query as never);
 
+    return sendSuccess(res, {
+      message: MESSAGE.COMMENT.LIST_SUCCESS,
+      data: result.items,
+      meta: result.meta,
+    });
+  },
   async hideComment(req: Request, res: Response) {
     const result = await commentService.hideComment(
       String(req.params.commentId),

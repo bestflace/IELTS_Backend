@@ -43,6 +43,8 @@ function extractComparableValues(value: unknown): string[] {
   if (typeof value === "object") {
     const obj = value as Record<string, unknown>;
 
+    // Supported answer shapes. Keep these aliases because answers can come
+    // from manual admin entry, Excel import, or learner UI components.
     if ("value" in obj) {
       return extractComparableValues(obj.value);
     }
@@ -51,7 +53,23 @@ function extractComparableValues(value: unknown): string[] {
       return extractComparableValues(obj.values);
     }
 
-    return [JSON.stringify(obj)];
+    if ("answer" in obj) {
+      return extractComparableValues(obj.answer);
+    }
+
+    if ("answers" in obj) {
+      return extractComparableValues(obj.answers);
+    }
+
+    if ("selected" in obj) {
+      return extractComparableValues(obj.selected);
+    }
+
+    if ("selectedOptions" in obj) {
+      return extractComparableValues(obj.selectedOptions);
+    }
+
+    return [normalizePrimitive(obj)];
   }
 
   return [normalizePrimitive(value)];

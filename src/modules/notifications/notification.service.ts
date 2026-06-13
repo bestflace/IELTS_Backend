@@ -22,7 +22,11 @@ function mapNotification(item: any) {
 export const notificationService = {
   async getMyNotifications(
     userId: string,
-    query: { page?: number; limit?: number; unreadOnly?: boolean },
+    query: {
+      page?: number;
+      limit?: number;
+      unreadOnly?: boolean;
+    },
   ) {
     const pagination = parsePagination({
       page: query.page,
@@ -54,7 +58,10 @@ export const notificationService = {
 
   async getUnreadCount(userId: string) {
     const count = await notificationRepository.countUnread(userId);
-    return { unreadCount: count };
+
+    return {
+      unreadCount: count,
+    };
   },
 
   async markRead(userId: string, notificationId: string) {
@@ -76,9 +83,19 @@ export const notificationService = {
 
   async markAllRead(userId: string) {
     await notificationRepository.markAllRead(userId);
-    return { success: true };
+
+    return {
+      success: true,
+    };
   },
 
+  /**
+   * Gửi thông báo đề thi mới.
+   *
+   * Nghiệp vụ:
+   * - Chỉ học viên USER đang ACTIVE được nhận.
+   * - TEACHER và ADMIN không nhận.
+   */
   async sendTestPublishedNotifications(testId: string) {
     const test = await notificationRepository.findTestById(testId);
 
@@ -86,13 +103,13 @@ export const notificationService = {
       throw new NotFoundError(MESSAGE.NOTIFICATION.TEST_NOT_FOUND);
     }
 
-    const users = await notificationRepository.findActiveUsers();
+    const learners = await notificationRepository.findActiveLearners();
 
     const result = await notificationRepository.createManyNotifications(
-      users.map((user) => user.id),
+      learners.map((learner) => learner.id),
       "TEST_PUBLISHED",
-      "A new test has been published",
-      `New test available: ${test.title}`,
+      "Đề thi mới đã được xuất bản",
+      `Đề thi "${test.title}" hiện đã sẵn sàng để luyện tập.`,
       {
         testId: test.id,
         title: test.title,
@@ -106,6 +123,9 @@ export const notificationService = {
     };
   },
 
+  /**
+   * Gửi thông báo cho học viên sau khi giáo viên chấm bài.
+   */
   async sendSubmissionReviewedNotification(attemptId: string) {
     const attempt = await notificationRepository.findAttemptById(attemptId);
 
@@ -116,8 +136,8 @@ export const notificationService = {
     const result = await notificationRepository.createManyNotifications(
       [attempt.user_id],
       "TEACHER_REVIEW_DONE",
-      "Your submission has been reviewed",
-      `Your submission for test "${attempt.tests.title}" has been reviewed.`,
+      "Bài làm của bạn đã được giáo viên chấm",
+      `Bài làm cho đề "${attempt.tests.title}" đã được giáo viên nhận xét.`,
       {
         attemptId: attempt.id,
         testId: attempt.test_id,

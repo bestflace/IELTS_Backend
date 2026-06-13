@@ -453,6 +453,29 @@ function collectWritingTaskIds(
   return ids;
 }
 
+function normalizeSpeakingPartType(part: any, fallbackIndex: number) {
+  const raw =
+    part?.partType ||
+    part?.part_type ||
+    part?.speakingPart ||
+    part?.speaking_part ||
+    part?.partNo ||
+    part?.part_no ||
+    part?.partNumber ||
+    part?.part_number ||
+    fallbackIndex + 1;
+
+  if (raw === "PART_2" || raw === "Part 2" || raw === 2 || raw === "2") {
+    return "PART_2";
+  }
+
+  if (raw === "PART_3" || raw === "Part 3" || raw === 3 || raw === "3") {
+    return "PART_3";
+  }
+
+  return "PART_1";
+}
+
 function collectSpeakingInfo(
   snapshot: any,
   mode: test_type,
@@ -463,16 +486,37 @@ function collectSpeakingInfo(
   const promptIds = new Map<string, string>();
 
   for (const section of sections) {
-    const speakingSet = section.speakingSet;
+    const speakingSet = section.speakingSet || section.speaking_set;
 
     if (!speakingSet) continue;
 
-    for (const part of speakingSet.parts ?? []) {
-      parts.add(part.partType);
+    const speakingParts =
+      speakingSet.parts ||
+      speakingSet.speakingParts ||
+      speakingSet.speaking_parts ||
+      [];
 
-      for (const prompt of part.prompts ?? []) {
-        promptIds.set(prompt.id, part.partType);
+    for (const [index, part] of speakingParts.entries()) {
+      const partType = normalizeSpeakingPartType(part, index);
+
+      parts.add(partType);
+
+      const prompts =
+        part.prompts || part.speakingPrompts || part.speaking_prompts || [];
+
+      for (const prompt of prompts) {
+        if (prompt?.id) {
+          promptIds.set(prompt.id, partType);
+        }
       }
+    }
+
+    // Fallback an toàn: nếu Speaking Set tồn tại nhưng snapshot thiếu partType,
+    // vẫn cho phép lưu đủ 3 part theo nghiệp vụ IELTS Speaking.
+    if (speakingParts.length > 0 && parts.size === 0) {
+      parts.add("PART_1");
+      parts.add("PART_2");
+      parts.add("PART_3");
     }
   }
 
@@ -1094,8 +1138,36 @@ export const attemptService = {
       speakingPart,
     );
 
+    // Nếu chưa có bản ghi PART_1/PART_2/PART_3 thì tạo mới.
+    // Đây là chỗ code cũ đang sai: code cũ bắt buộc phải có existing rồi mới cho update.
     if (!existing) {
-      throw new NotFoundError(MESSAGE.ATTEMPT.SPEAKING_PART_NOT_IN_ATTEMPT);
+      if (
+        !body.audioUrl ||
+        !body.audioFileKey ||
+        !body.audioMimeType ||
+        !body.audioSizeBytes
+      ) {
+        throw new BadRequestError(
+          "Speaking audio is required before creating a speaking response",
+        );
+      }
+
+      const saved = await attemptRepository.upsertSpeakingResponses(attemptId, [
+        {
+          speakingPart,
+          promptId: body.promptId ?? null,
+
+          audioUrl: body.audioUrl,
+          audioFileKey: body.audioFileKey,
+          audioMimeType: body.audioMimeType,
+          audioSizeBytes: body.audioSizeBytes,
+          audioETag: body.audioETag ?? null,
+
+          durationSec: body.durationSec ?? null,
+        },
+      ]);
+
+      return mapSpeakingResponse(saved[0]);
     }
 
     await attemptRepository.updateSpeakingResponseByPart(
@@ -1126,6 +1198,7 @@ export const attemptService = {
       attemptId,
       speakingPart,
     );
+
     return mapSpeakingResponse(updated);
   },
 

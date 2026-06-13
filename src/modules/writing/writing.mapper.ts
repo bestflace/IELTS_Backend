@@ -11,6 +11,75 @@ function mapTag(tag: { id: string; name: string; slug: string }) {
   };
 }
 
+type LinkedTestSection = {
+  id: string;
+  test_id: string;
+  part_label: string | null;
+  sort_order: number;
+  time_limit_sec: number | null;
+  tests: {
+    id: string;
+    type: string;
+    title: string;
+    level: unknown;
+    status: string;
+    description: string | null;
+    published_at: Date | null;
+  };
+};
+
+function mapAvailableTests(sections: LinkedTestSection[]) {
+  return sections
+    .filter((section) => section.tests.status === "PUBLISHED")
+    .map((section) => ({
+      testId: section.tests.id,
+      testTitle: section.tests.title,
+      testType: section.tests.type,
+      testLevel: toNullableNumber(section.tests.level),
+      testDescription: section.tests.description,
+      publishedAt: section.tests.published_at,
+      sectionId: section.id,
+      partLabel: section.part_label,
+      sortOrder: section.sort_order,
+      timeLimitSec: section.time_limit_sec,
+    }));
+}
+
+export function mapPublicWritingTaskList(task: {
+  id: string;
+  task_no: number | null;
+  title: string;
+  level: unknown;
+  status: string;
+  chart_url: string | null;
+  image_url: string | null;
+  created_at: Date;
+  updated_at: Date;
+  writing_task_tags: Array<{
+    tags: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>;
+  _count?: {
+    test_sections: number;
+  };
+}) {
+  return {
+    id: task.id,
+    taskNo: task.task_no,
+    title: task.title,
+    level: toNullableNumber(task.level),
+    status: task.status,
+    hasVisual: Boolean(task.chart_url || task.image_url),
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
+    testSectionCount: task._count?.test_sections ?? 0,
+    tags: task.writing_task_tags.map((item) => mapTag(item.tags)),
+  };
+}
+
 export function mapWritingTaskList(task: {
   id: string;
   task_no: number | null;
@@ -53,9 +122,6 @@ export function mapPublicWritingTaskDetail(task: {
   id: string;
   task_no: number | null;
   title: string;
-  prompt_text: string;
-  chart_url: string | null;
-  image_url: string | null;
   level: unknown;
   status: string;
   created_at: Date;
@@ -67,19 +133,22 @@ export function mapPublicWritingTaskDetail(task: {
       slug: string;
     };
   }>;
+  _count: {
+    test_sections: number;
+  };
+  test_sections: LinkedTestSection[];
 }) {
   return {
     id: task.id,
     taskNo: task.task_no,
     title: task.title,
-    promptText: task.prompt_text,
-    chartUrl: task.chart_url,
-    imageUrl: task.image_url,
     level: toNullableNumber(task.level),
     status: task.status,
     createdAt: task.created_at,
     updatedAt: task.updated_at,
+    testSectionCount: task._count.test_sections,
     tags: task.writing_task_tags.map((item) => mapTag(item.tags)),
+    availableTests: mapAvailableTests(task.test_sections),
   };
 }
 

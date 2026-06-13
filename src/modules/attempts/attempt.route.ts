@@ -31,6 +31,7 @@ const router = Router();
 router.post(
   "/attempts",
   authenticate,
+  authorize("USER"),
   validate({ body: createAttemptSchema }),
   asyncHandler(attemptController.createAttempt),
 );

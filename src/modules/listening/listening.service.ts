@@ -17,6 +17,7 @@ import {
   mapAdminListeningSetDetail,
   mapListeningSetList,
   mapPublicListeningSetDetail,
+  mapPublicListeningSetList,
 } from "./listening.mapper";
 import { listeningRepository } from "./listening.repository";
 import {
@@ -104,7 +105,7 @@ export const listeningService = {
     ]);
 
     return {
-      items: items.map(mapListeningSetList),
+      items: items.map(mapPublicListeningSetList),
       meta: buildPaginationMeta({
         page: pagination.page,
         limit: pagination.limit,

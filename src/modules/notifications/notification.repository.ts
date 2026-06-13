@@ -1,5 +1,41 @@
-import { notification_type } from "@prisma/client";
+import { notification_type, user_role, user_status } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "../../config/prisma";
+
+function buildVisibleNotificationWhere(
+  userId: string,
+  unreadOnly = false,
+): Prisma.notificationsWhereInput {
+  const where: Prisma.notificationsWhereInput = {
+    user_id: userId,
+
+    OR: [
+      {
+        type: {
+          not: notification_type.TEST_PUBLISHED,
+        },
+      },
+      {
+        type: notification_type.TEST_PUBLISHED,
+
+        // TEST_PUBLISHED chỉ được hiển thị nếu chủ notification
+        // hiện tại có role USER.
+        users: {
+          is: {
+            role: user_role.USER,
+          },
+        },
+      },
+    ],
+  };
+
+  if (unreadOnly) {
+    where.is_read = false;
+  }
+
+  return where;
+}
 
 export const notificationRepository = {
   findUserNotifications(params: {
@@ -9,10 +45,10 @@ export const notificationRepository = {
     unreadOnly?: boolean;
   }) {
     return prisma.notifications.findMany({
-      where: {
-        user_id: params.userId,
-        ...(params.unreadOnly ? { is_read: false } : {}),
-      },
+      where: buildVisibleNotificationWhere(
+        params.userId,
+        params.unreadOnly === true,
+      ),
       orderBy: {
         created_at: "desc",
       },
@@ -23,19 +59,16 @@ export const notificationRepository = {
 
   countUserNotifications(params: { userId: string; unreadOnly?: boolean }) {
     return prisma.notifications.count({
-      where: {
-        user_id: params.userId,
-        ...(params.unreadOnly ? { is_read: false } : {}),
-      },
+      where: buildVisibleNotificationWhere(
+        params.userId,
+        params.unreadOnly === true,
+      ),
     });
   },
 
   countUnread(userId: string) {
     return prisma.notifications.count({
-      where: {
-        user_id: userId,
-        is_read: false,
-      },
+      where: buildVisibleNotificationWhere(userId, true),
     });
   },
 
@@ -43,14 +76,16 @@ export const notificationRepository = {
     return prisma.notifications.findFirst({
       where: {
         id: notificationId,
-        user_id: userId,
+        ...buildVisibleNotificationWhere(userId),
       },
     });
   },
 
   markRead(notificationId: string) {
     return prisma.notifications.update({
-      where: { id: notificationId },
+      where: {
+        id: notificationId,
+      },
       data: {
         is_read: true,
         read_at: new Date(),
@@ -60,10 +95,8 @@ export const notificationRepository = {
 
   markAllRead(userId: string) {
     return prisma.notifications.updateMany({
-      where: {
-        user_id: userId,
-        is_read: false,
-      },
+      // Chỉ đánh dấu những notification mà user được phép nhìn thấy.
+      where: buildVisibleNotificationWhere(userId, true),
       data: {
         is_read: true,
         read_at: new Date(),
@@ -71,10 +104,17 @@ export const notificationRepository = {
     });
   },
 
-  findActiveUsers() {
+  /**
+   * Chỉ lấy học viên đang hoạt động.
+   *
+   * Không lấy TEACHER và ADMIN vì TEST_PUBLISHED là thông báo
+   * dành riêng cho người học.
+   */
+  findActiveLearners() {
     return prisma.users.findMany({
       where: {
-        status: "ACTIVE",
+        role: user_role.USER,
+        status: user_status.ACTIVE,
       },
       select: {
         id: true,
@@ -84,13 +124,17 @@ export const notificationRepository = {
 
   findTestById(testId: string) {
     return prisma.tests.findUnique({
-      where: { id: testId },
+      where: {
+        id: testId,
+      },
     });
   },
 
   findAttemptById(attemptId: string) {
     return prisma.attempts.findUnique({
-      where: { id: attemptId },
+      where: {
+        id: attemptId,
+      },
       include: {
         users: true,
         tests: true,
@@ -103,20 +147,33 @@ export const notificationRepository = {
     type: notification_type,
     title: string,
     message: string,
-    dataJson?: unknown,
+    dataJson?: Prisma.InputJsonValue,
   ) {
     if (userIds.length === 0) {
-      return Promise.resolve({ count: 0 });
+      return Promise.resolve({
+        count: 0,
+      });
     }
 
-    return prisma.notifications.createMany({
-      data: userIds.map((userId) => ({
+    const notifications: Prisma.notificationsCreateManyInput[] = userIds.map(
+      (userId) => ({
         user_id: userId,
         type,
         title,
         message,
-        data_json: (dataJson ?? null) as any,
-      })),
+
+        // Nếu không truyền dataJson thì bỏ qua field data_json.
+        // Vì data_json là Json? nên PostgreSQL sẽ lưu SQL NULL.
+        ...(dataJson === undefined
+          ? {}
+          : {
+              data_json: dataJson,
+            }),
+      }),
+    );
+
+    return prisma.notifications.createMany({
+      data: notifications,
     });
   },
 };

@@ -1,7 +1,14 @@
 import { Prisma, publish_status } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 
-const publicDetailInclude = {
+const publicDetailSelect = {
+  id: true,
+  task_no: true,
+  title: true,
+  level: true,
+  status: true,
+  created_at: true,
+  updated_at: true,
   writing_task_tags: {
     include: {
       tags: {
@@ -13,7 +20,35 @@ const publicDetailInclude = {
       },
     },
   },
-} satisfies Prisma.writing_tasksInclude;
+  _count: {
+    select: {
+      test_sections: true,
+    },
+  },
+  test_sections: {
+    orderBy: {
+      sort_order: "asc" as const,
+    },
+    select: {
+      id: true,
+      test_id: true,
+      part_label: true,
+      sort_order: true,
+      time_limit_sec: true,
+      tests: {
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          level: true,
+          status: true,
+          description: true,
+          published_at: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.writing_tasksSelect;
 
 const adminDetailInclude = {
   writing_task_tags: {
@@ -172,7 +207,7 @@ export const writingRepository = {
         id,
         status: publish_status.PUBLISHED,
       },
-      include: publicDetailInclude,
+      select: publicDetailSelect,
     });
   },
 

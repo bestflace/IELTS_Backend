@@ -1,7 +1,13 @@
 import { Prisma, publish_status, question_type } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 
-const publicDetailInclude = {
+const publicDetailSelect = {
+  id: true,
+  title: true,
+  level: true,
+  status: true,
+  created_at: true,
+  updated_at: true,
   reading_set_tags: {
     include: {
       tags: {
@@ -13,26 +19,35 @@ const publicDetailInclude = {
       },
     },
   },
-  questions: {
+  _count: {
+    select: {
+      questions: true,
+    },
+  },
+  test_sections: {
     orderBy: {
       sort_order: "asc" as const,
     },
     select: {
       id: true,
-      reading_set_id: true,
-      section_label: true,
-      q_no: true,
-      question_type: true,
-      prompt_text: true,
-      instruction_text: true,
-      options_json: true,
-      points: true,
+      test_id: true,
+      part_label: true,
       sort_order: true,
-      created_at: true,
-      updated_at: true,
+      time_limit_sec: true,
+      tests: {
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          level: true,
+          status: true,
+          description: true,
+          published_at: true,
+        },
+      },
     },
   },
-} satisfies Prisma.reading_setsInclude;
+} satisfies Prisma.reading_setsSelect;
 
 const adminDetailInclude = {
   reading_set_tags: {
@@ -165,7 +180,7 @@ export const readingRepository = {
         id,
         status: publish_status.PUBLISHED,
       },
-      include: publicDetailInclude,
+      select: publicDetailSelect,
     });
   },
 

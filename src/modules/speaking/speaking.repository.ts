@@ -6,6 +6,57 @@ import {
 } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 
+const publicDetailSelect = {
+  id: true,
+  topic: true,
+  level: true,
+  status: true,
+  created_at: true,
+  updated_at: true,
+  speaking_set_tags: {
+    orderBy: {
+      tag_id: "asc" as const,
+    },
+    include: {
+      tags: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+    },
+  },
+  _count: {
+    select: {
+      speaking_parts: true,
+    },
+  },
+  test_sections: {
+    orderBy: {
+      sort_order: "asc" as const,
+    },
+    select: {
+      id: true,
+      test_id: true,
+      part_label: true,
+      sort_order: true,
+      time_limit_sec: true,
+      tests: {
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          level: true,
+          status: true,
+          description: true,
+          published_at: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.speaking_setsSelect;
+
 const speakingSetDetailInclude = {
   speaking_set_tags: {
     orderBy: {
@@ -154,7 +205,7 @@ export const speakingRepository = {
         id,
         status: publish_status.PUBLISHED,
       },
-      include: speakingSetDetailInclude,
+      select: publicDetailSelect,
     });
   },
 

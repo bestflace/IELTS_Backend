@@ -1,4 +1,4 @@
-import { comment_status } from "@prisma/client";
+import { Prisma, comment_status, user_role } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 
 export const commentRepository = {
@@ -12,6 +12,14 @@ export const commentRepository = {
             full_name: true,
             email: true,
             avatar_url: true,
+            role: true,
+          },
+        },
+        tests: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
           },
         },
       },
@@ -135,6 +143,255 @@ export const commentRepository = {
       data: {
         status: comment_status.ACTIVE,
         updated_at: new Date(),
+      },
+    });
+  },
+
+  findTeacherRecipientsForAttempt(attemptId: string) {
+    return prisma.teacher_submissions.findMany({
+      where: {
+        attempt_id: attemptId,
+        claimed_by: {
+          not: null,
+        },
+      },
+      select: {
+        id: true,
+        attempt_id: true,
+        skill: true,
+        claimed_by: true,
+      },
+    });
+  },
+
+  findAdmins() {
+    return prisma.users.findMany({
+      where: {
+        role: user_role.ADMIN,
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+      },
+    });
+  },
+
+  findAttemptOwner(attemptId: string) {
+    return prisma.attempts.findUnique({
+      where: {
+        id: attemptId,
+      },
+      select: {
+        id: true,
+        user_id: true,
+        test_id: true,
+        tests: {
+          select: {
+            title: true,
+          },
+        },
+      },
+    });
+  },
+
+  createCommentNotification(data: {
+    userId: string;
+    title: string;
+    message: string;
+    dataJson: Prisma.InputJsonValue;
+  }) {
+    return prisma.notifications.create({
+      data: {
+        user_id: data.userId,
+        type: "SYSTEM",
+        title: data.title,
+        message: data.message,
+        data_json: data.dataJson,
+      },
+    });
+  },
+
+  createManyCommentNotifications(
+    items: Array<{
+      userId: string;
+      title: string;
+      message: string;
+      dataJson: Prisma.InputJsonValue;
+    }>,
+  ) {
+    if (!items.length) {
+      return Promise.resolve({ count: 0 });
+    }
+
+    return prisma.notifications.createMany({
+      data: items.map((item) => ({
+        user_id: item.userId,
+        type: "SYSTEM",
+        title: item.title,
+        message: item.message,
+        data_json: item.dataJson,
+      })),
+    });
+  },
+
+  findAdminComments(params: {
+    skip: number;
+    take: number;
+    status?: comment_status;
+    search?: string;
+  }) {
+    return prisma.attempt_comments.findMany({
+      where: {
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.search
+          ? {
+              OR: [
+                {
+                  content: {
+                    contains: params.search,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  users: {
+                    full_name: {
+                      contains: params.search,
+                      mode: "insensitive",
+                    },
+                  },
+                },
+                {
+                  users: {
+                    email: {
+                      contains: params.search,
+                      mode: "insensitive",
+                    },
+                  },
+                },
+                {
+                  attempt_id: {
+                    contains: params.search,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            }
+          : {}),
+        status: params.status ?? {
+          not: comment_status.DELETED,
+        },
+      },
+      include: {
+        users: {
+          select: {
+            id: true,
+            full_name: true,
+            email: true,
+            avatar_url: true,
+            role: true,
+          },
+        },
+        attempts: {
+          select: {
+            id: true,
+            test_id: true,
+            tests: {
+              select: {
+                id: true,
+                title: true,
+                type: true,
+              },
+            },
+            teacher_submissions: {
+              select: {
+                id: true,
+                skill: true,
+                status: true,
+              },
+              take: 1,
+            },
+          },
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+      skip: params.skip,
+      take: params.take,
+    });
+  },
+
+  countAdminComments(params: { status?: comment_status; search?: string }) {
+    return prisma.attempt_comments.count({
+      where: {
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.search
+          ? {
+              OR: [
+                {
+                  content: {
+                    contains: params.search,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  users: {
+                    full_name: {
+                      contains: params.search,
+                      mode: "insensitive",
+                    },
+                  },
+                },
+                {
+                  users: {
+                    email: {
+                      contains: params.search,
+                      mode: "insensitive",
+                    },
+                  },
+                },
+                {
+                  attempt_id: {
+                    contains: params.search,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            }
+          : {}),
+        status: params.status ?? {
+          not: comment_status.DELETED,
+        },
+      },
+    });
+  },
+  findTeachersForAttemptComment(attemptId: string) {
+    return prisma.teacher_submissions.findMany({
+      where: {
+        attempt_id: attemptId,
+      },
+      select: {
+        id: true,
+        attempt_id: true,
+        skill: true,
+        claimed_by: true,
+        teacher_reviews: {
+          select: {
+            teacher_id: true,
+          },
+        },
+      },
+    });
+  },
+
+  findActiveTeachers() {
+    return prisma.users.findMany({
+      where: {
+        role: "TEACHER",
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
       },
     });
   },

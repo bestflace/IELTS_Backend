@@ -15,7 +15,18 @@ const teacherSubmissionInclude = {
       avatar_url: true,
     },
   },
-  teacher_reviews: true,
+  teacher_reviews: {
+    include: {
+      users: {
+        select: {
+          id: true,
+          full_name: true,
+          email: true,
+          avatar_url: true,
+        },
+      },
+    },
+  },
   attempts: {
     include: {
       users: {
@@ -60,7 +71,18 @@ const teacherSubmissionInclude = {
       },
       teacher_submissions: {
         include: {
-          teacher_reviews: true,
+          teacher_reviews: {
+            include: {
+              users: {
+                select: {
+                  id: true,
+                  full_name: true,
+                  email: true,
+                  avatar_url: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -91,7 +113,18 @@ export const teacherReviewRepository = {
             avatar_url: true,
           },
         },
-        teacher_reviews: true,
+        teacher_reviews: {
+          include: {
+            users: {
+              select: {
+                id: true,
+                full_name: true,
+                email: true,
+                avatar_url: true,
+              },
+            },
+          },
+        },
         attempts: {
           include: {
             users: {

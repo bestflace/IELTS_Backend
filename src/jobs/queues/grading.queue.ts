@@ -24,6 +24,10 @@ function normalizeAiGradingPayload(
   return typeof input === "string" ? { attemptId: input } : input;
 }
 
+function safeJobId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 export async function enqueueWritingAiGrading(
   input: string | AiGradingJobData,
 ) {
@@ -37,7 +41,7 @@ export async function enqueueWritingAiGrading(
     },
     removeOnComplete: 200,
     removeOnFail: 200,
-    jobId: `writing-ai:${data.aiGradingId ?? data.attemptId}`,
+    jobId: safeJobId(`writing-ai-${data.aiGradingId ?? data.attemptId}`),
   });
 }
 
@@ -54,6 +58,6 @@ export async function enqueueSpeakingAiGrading(
     },
     removeOnComplete: 200,
     removeOnFail: 200,
-    jobId: `speaking-ai:${data.aiGradingId ?? data.attemptId}`,
+    jobId: safeJobId(`speaking-ai-${data.aiGradingId ?? data.attemptId}`),
   });
 }

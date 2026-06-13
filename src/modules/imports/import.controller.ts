@@ -54,4 +54,12 @@ export const importController = {
       data: result,
     });
   },
+  async deleteImportJob(req: Request, res: Response) {
+    const result = await importService.deleteImportJob(String(req.params.id));
+
+    return sendSuccess(res, {
+      message: "Xoá import job thành công.",
+      data: result,
+    });
+  },
 };

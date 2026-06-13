@@ -9,6 +9,7 @@ import {
   commentIdParamsSchema,
   createCommentSchema,
   updateCommentSchema,
+  adminCommentListQuerySchema,
 } from "./comment.validator";
 
 const router = Router();
@@ -26,7 +27,13 @@ router.post(
   validate({ params: attemptIdParamsSchema, body: createCommentSchema }),
   asyncHandler(commentController.createComment),
 );
-
+router.get(
+  "/admin/comments",
+  authenticate,
+  authorize("ADMIN"),
+  validate({ query: adminCommentListQuerySchema }),
+  asyncHandler(commentController.getAdminComments),
+);
 router.patch(
   "/comments/:commentId",
   authenticate,

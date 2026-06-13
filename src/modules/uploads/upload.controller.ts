@@ -16,31 +16,21 @@ export const uploadController = {
       data: result,
     });
   },
+
   async uploadCloudinary(req: Request, res: Response) {
-    try {
-      console.log("[Cloudinary Upload] body:", req.body);
-      console.log("[Cloudinary Upload] file:", {
-        originalname: req.file?.originalname,
-        mimetype: req.file?.mimetype,
-        size: req.file?.size,
-      });
+    const result = await uploadService.uploadToCloudinary(
+      String(req.user!.sub),
+      String(req.user!.role),
+      req.body,
+      req.file,
+    );
 
-      const result = await uploadService.uploadToCloudinary(
-        String(req.user!.sub),
-        String(req.user!.role),
-        req.body,
-        req.file,
-      );
-
-      return sendSuccess(res, {
-        message: "Upload file to Cloudinary successfully",
-        data: result,
-      });
-    } catch (error) {
-      console.error("[Cloudinary Upload Error]", error);
-      throw error;
-    }
+    return sendSuccess(res, {
+      message: "Upload file to Cloudinary successfully",
+      data: result,
+    });
   },
+
   async completeUpload(req: Request, res: Response) {
     const result = await uploadService.completeUpload(
       String(req.user!.sub),
@@ -50,6 +40,29 @@ export const uploadController = {
 
     return sendSuccess(res, {
       message: MESSAGE.UPLOAD.COMPLETE_SUCCESS,
+      data: result,
+    });
+  },
+
+  async getUploads(req: Request, res: Response) {
+    const result = await uploadService.getUploads(req.query as never);
+
+    return sendSuccess(res, {
+      message: "Lấy danh sách file upload thành công.",
+      data: result.items,
+      meta: result.meta,
+    });
+  },
+
+  async getUploadById(req: Request, res: Response) {
+    const result = await uploadService.getUploadById(
+      String(req.params.id),
+      String(req.user!.sub),
+      String(req.user!.role),
+    );
+
+    return sendSuccess(res, {
+      message: "Lấy chi tiết file upload thành công.",
       data: result,
     });
   },

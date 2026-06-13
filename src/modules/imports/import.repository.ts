@@ -102,4 +102,9 @@ export const importRepository = {
       },
     });
   },
+  deleteImportJob(id: string) {
+    return prisma.import_jobs.delete({
+      where: { id },
+    });
+  },
 };

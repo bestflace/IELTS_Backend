@@ -10,6 +10,7 @@ import {
 import {
   mapAdminWritingTaskDetail,
   mapPublicWritingTaskDetail,
+  mapPublicWritingTaskList,
   mapWritingTaskList,
 } from "./writing.mapper";
 import { writingRepository } from "./writing.repository";
@@ -74,7 +75,7 @@ export const writingService = {
     ]);
 
     return {
-      items: items.map(mapWritingTaskList),
+      items: items.map(mapPublicWritingTaskList),
       meta: buildPaginationMeta({
         page: pagination.page,
         limit: pagination.limit,

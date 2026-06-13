@@ -2,6 +2,10 @@ import { comment_status } from "@prisma/client";
 import { MESSAGE } from "../../common/constants/message.constant";
 import { ForbiddenError } from "../../common/errors/forbidden.error";
 import { NotFoundError } from "../../common/errors/not-found.error";
+import {
+  buildPaginationMeta,
+  parsePagination,
+} from "../../common/utils/pagination";
 import { commentRepository } from "./comment.repository";
 
 function normalizeText(value: string): string {
@@ -13,14 +17,19 @@ function canAccessAttempt(role: string, userId: string, attempt: any) {
   return attempt.user_id === userId;
 }
 
-function mapComment(comment: any) {
+function mapComment(comment: any, canModerate = false) {
+  const hidden = comment.status === comment_status.HIDDEN;
+
   return {
     id: comment.id,
     attemptId: comment.attempt_id,
     userId: comment.user_id,
     parentId: comment.parent_id,
-    content: comment.status === comment_status.HIDDEN ? null : comment.content,
+    content: hidden && !canModerate ? null : comment.content,
     status: comment.status,
+    isHidden: hidden,
+    hiddenMessage:
+      hidden && !canModerate ? "Quản trị viên đã ẩn bình luận này." : null,
     createdAt: comment.created_at,
     updatedAt: comment.updated_at,
     deletedAt: comment.deleted_at,
@@ -37,8 +46,62 @@ function mapComment(comment: any) {
   };
 }
 
-function buildTree(comments: any[]) {
-  const mapped = comments.map(mapComment);
+function mapAdminComment(comment: any) {
+  const submission = comment.attempts?.teacher_submissions?.[0] || null;
+  return {
+    id: comment.id,
+    attemptId: comment.attempt_id,
+    userId: comment.user_id,
+    parentId: comment.parent_id,
+    content: comment.content,
+    status: comment.status,
+    createdAt: comment.created_at,
+    updatedAt: comment.updated_at,
+    deletedAt: comment.deleted_at,
+    author: comment.users
+      ? {
+          id: comment.users.id,
+          fullName: comment.users.full_name,
+          email: comment.users.email,
+          avatarUrl: comment.users.avatar_url,
+          role: comment.users.role,
+        }
+      : null,
+    user: comment.users
+      ? {
+          id: comment.users.id,
+          fullName: comment.users.full_name,
+          email: comment.users.email,
+          avatarUrl: comment.users.avatar_url,
+          role: comment.users.role,
+        }
+      : null,
+    attempt: comment.attempts
+      ? {
+          id: comment.attempts.id,
+          testId: comment.attempts.test_id,
+          test: comment.attempts.tests
+            ? {
+                id: comment.attempts.tests.id,
+                title: comment.attempts.tests.title,
+                type: comment.attempts.tests.type,
+              }
+            : null,
+        }
+      : null,
+    submissionId: submission?.id || null,
+    submission: submission
+      ? {
+          id: submission.id,
+          skill: submission.skill,
+          status: submission.status,
+        }
+      : null,
+  };
+}
+
+function buildTree(comments: any[], canModerate = false) {
+  const mapped = comments.map((comment) => mapComment(comment, canModerate));
   const map = new Map(mapped.map((item) => [item.id, item]));
 
   const roots: any[] = [];
@@ -54,6 +117,124 @@ function buildTree(comments: any[]) {
   return roots;
 }
 
+async function notifyAfterCommentCreated(params: {
+  actorUserId: string;
+  actorRole: string;
+  attemptId: string;
+  commentId: string;
+  parentId?: string | null;
+}) {
+  const attempt = await commentRepository.findAttemptOwner(params.attemptId);
+
+  if (!attempt) return;
+
+  if (params.actorRole === "USER" || params.actorRole === "LEARNER") {
+    const teacherSubmissions =
+      await commentRepository.findTeachersForAttemptComment(params.attemptId);
+
+    const teacherTargets = teacherSubmissions
+      .flatMap((item) => {
+        const ids = [item.claimed_by, item.teacher_reviews?.teacher_id].filter(
+          Boolean,
+        ) as string[];
+
+        return ids.map((teacherId) => ({
+          teacherId,
+          submissionId: item.id,
+          skill: item.skill,
+        }));
+      })
+      .filter((item) => item.teacherId !== params.actorUserId);
+
+    const uniqueTeacherTargets = Array.from(
+      new Map(
+        teacherTargets.map((item) => [
+          `${item.teacherId}-${item.submissionId}`,
+          item,
+        ]),
+      ).values(),
+    );
+
+    if (uniqueTeacherTargets.length) {
+      await commentRepository.createManyCommentNotifications(
+        uniqueTeacherTargets.map((item) => ({
+          userId: item.teacherId,
+          title: "Có bình luận mới từ học viên",
+          message: `Học viên vừa gửi câu hỏi dưới bài làm "${attempt.tests?.title ?? "IELTS"}".`,
+          dataJson: {
+            kind: "ATTEMPT_COMMENT",
+            attemptId: attempt.id,
+            submissionId: item.submissionId,
+            commentId: params.commentId,
+            skill: item.skill,
+          },
+        })),
+      );
+
+      return;
+    }
+
+    const teachers = await commentRepository.findActiveTeachers();
+
+    if (teachers.length) {
+      await commentRepository.createManyCommentNotifications(
+        teachers
+          .filter((teacher) => teacher.id !== params.actorUserId)
+          .map((teacher) => ({
+            userId: teacher.id,
+            title: "Có bình luận mới từ học viên",
+            message: `Học viên vừa gửi câu hỏi dưới bài làm "${attempt.tests?.title ?? "IELTS"}".`,
+            dataJson: {
+              kind: "ATTEMPT_COMMENT",
+              attemptId: attempt.id,
+              commentId: params.commentId,
+            },
+          })),
+      );
+
+      return;
+    }
+
+    const admins = await commentRepository.findAdmins();
+
+    await commentRepository.createManyCommentNotifications(
+      admins
+        .filter((admin) => admin.id !== params.actorUserId)
+        .map((admin) => ({
+          userId: admin.id,
+          title: "Có bình luận mới cần theo dõi",
+          message: `Học viên vừa gửi bình luận dưới bài làm "${attempt.tests?.title ?? "IELTS"}".`,
+          dataJson: {
+            kind: "ATTEMPT_COMMENT",
+            attemptId: attempt.id,
+            commentId: params.commentId,
+          },
+        })),
+    );
+
+    return;
+  }
+
+  if (attempt.user_id && attempt.user_id !== params.actorUserId) {
+    await commentRepository.createCommentNotification({
+      userId: attempt.user_id,
+      title:
+        params.actorRole === "TEACHER"
+          ? "Giáo viên đã phản hồi bình luận"
+          : "Bình luận của bạn có phản hồi mới",
+      message:
+        params.actorRole === "TEACHER"
+          ? "Giáo viên vừa trả lời câu hỏi của bạn dưới bài làm."
+          : "Có phản hồi mới dưới bài làm của bạn.",
+      dataJson: {
+        kind: "ATTEMPT_COMMENT_REPLY",
+        attemptId: attempt.id,
+        commentId: params.commentId,
+      },
+    });
+  }
+}
+
 export const commentService = {
   async getAttemptComments(userId: string, role: string, attemptId: string) {
     const attempt = await commentRepository.findAttemptById(attemptId);
@@ -67,7 +248,7 @@ export const commentService = {
     }
 
     const comments = await commentRepository.findCommentsByAttemptId(attemptId);
-    return buildTree(comments);
+    return buildTree(comments, role === "ADMIN");
   },
 
   async createComment(
@@ -103,6 +284,14 @@ export const commentService = {
       user_id: userId,
       parent_id: body.parentId ?? null,
       content: normalizeText(body.content),
+    });
+
+    await notifyAfterCommentCreated({
+      actorUserId: userId,
+      actorRole: role,
+      attemptId,
+      commentId: created.id,
+      parentId: body.parentId ?? null,
     });
 
     return mapComment(created);
@@ -167,5 +356,39 @@ export const commentService = {
 
     await commentRepository.unhideComment(commentId);
     return { success: true };
+  },
+
+  async getAdminComments(query: {
+    page?: number;
+    limit?: number;
+    status?: comment_status;
+    search?: string;
+  }) {
+    const pagination = parsePagination({
+      page: query.page,
+      limit: query.limit,
+    });
+
+    const [items, total] = await Promise.all([
+      commentRepository.findAdminComments({
+        skip: pagination.skip,
+        take: pagination.limit,
+        status: query.status,
+        search: query.search?.trim() || undefined,
+      }),
+      commentRepository.countAdminComments({
+        status: query.status,
+        search: query.search?.trim() || undefined,
+      }),
+    ]);
+
+    return {
+      items: items.map(mapAdminComment),
+      meta: buildPaginationMeta({
+        page: pagination.page,
+        limit: pagination.limit,
+        total,
+      }),
+    };
   },
 };
