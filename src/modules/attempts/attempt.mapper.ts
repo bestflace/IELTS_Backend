@@ -17,12 +17,16 @@ export function mapAttemptListItem(attempt: any) {
       ? {
           correctCount: attempt.attempt_results.correct_count,
           totalCount: attempt.attempt_results.total_count,
-          rawScore: attempt.attempt_results.raw_score
-            ? Number(attempt.attempt_results.raw_score)
-            : null,
-          bandEstimate: attempt.attempt_results.band_estimate
-            ? Number(attempt.attempt_results.band_estimate)
-            : null,
+          rawScore:
+            attempt.attempt_results.raw_score !== null &&
+            attempt.attempt_results.raw_score !== undefined
+              ? Number(attempt.attempt_results.raw_score)
+              : null,
+          bandEstimate:
+            attempt.attempt_results.band_estimate !== null &&
+            attempt.attempt_results.band_estimate !== undefined
+              ? Number(attempt.attempt_results.band_estimate)
+              : null,
           summaryJson: attempt.attempt_results.summary_json,
         }
       : null,
@@ -103,9 +107,14 @@ export function mapAttemptResultDetail(detail: any) {
     questionId: detail.question_id,
     qNo: detail.q_no,
     userAnswerJson: detail.user_answer_json,
+    userAnswer: detail.user_answer_json,
     correctJson: detail.correct_json,
+    correctAnswer: detail.correct_json,
     isCorrect: detail.is_correct,
-    pointsAwarded: detail.points_awarded ? Number(detail.points_awarded) : null,
+    pointsAwarded:
+      detail.points_awarded !== null && detail.points_awarded !== undefined
+        ? Number(detail.points_awarded)
+        : null,
     explanation: detail.explanation,
     createdAt: detail.created_at,
   };
@@ -117,7 +126,10 @@ export function mapTeacherReview(review: any) {
     submissionId: review.submission_id,
     attemptId: review.attempt_id,
     teacherId: review.teacher_id,
-    overallBand: review.overall_band ? Number(review.overall_band) : null,
+    overallBand:
+      review.overall_band !== null && review.overall_band !== undefined
+        ? Number(review.overall_band)
+        : null,
     criteriaJson: review.criteria_json,
     summary: review.summary,
     actionItemsJson: review.action_items_json,
