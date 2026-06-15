@@ -1,4 +1,10 @@
-import { Prisma, comment_status, user_role } from "@prisma/client";
+import {
+  Prisma,
+  comment_status,
+  teacher_submission_status,
+  test_type,
+  user_role,
+} from "@prisma/client";
 import { prisma } from "../../config/prisma";
 
 export const commentRepository = {
@@ -20,6 +26,19 @@ export const commentRepository = {
             id: true,
             title: true,
             type: true,
+          },
+        },
+        attempt_snapshots: {
+          select: {
+            test_snapshot_json: true,
+          },
+        },
+        teacher_submissions: {
+          select: {
+            id: true,
+            skill: true,
+            status: true,
+            claimed_by: true,
           },
         },
       },
@@ -88,6 +107,29 @@ export const commentRepository = {
             email: true,
             avatar_url: true,
             role: true,
+          },
+        },
+        attempts: {
+          select: {
+            id: true,
+            test_id: true,
+            tests: {
+              select: {
+                id: true,
+                title: true,
+                type: true,
+              },
+            },
+            teacher_submissions: {
+              select: {
+                id: true,
+                skill: true,
+                status: true,
+              },
+              orderBy: {
+                created_at: "asc",
+              },
+            },
           },
         },
       },
@@ -185,9 +227,29 @@ export const commentRepository = {
         id: true,
         user_id: true,
         test_id: true,
+        mode: true,
+        part_label: true,
         tests: {
           select: {
+            id: true,
             title: true,
+            type: true,
+          },
+        },
+        attempt_snapshots: {
+          select: {
+            test_snapshot_json: true,
+          },
+        },
+        teacher_submissions: {
+          select: {
+            id: true,
+            skill: true,
+            status: true,
+            claimed_by: true,
+          },
+          orderBy: {
+            created_at: "asc",
           },
         },
       },
@@ -302,13 +364,20 @@ export const commentRepository = {
                 type: true,
               },
             },
+            attempt_snapshots: {
+              select: {
+                test_snapshot_json: true,
+              },
+            },
             teacher_submissions: {
               select: {
                 id: true,
                 skill: true,
                 status: true,
               },
-              take: 1,
+              orderBy: {
+                created_at: "asc",
+              },
             },
           },
         },
@@ -381,6 +450,25 @@ export const commentRepository = {
           },
         },
       },
+    });
+  },
+
+  ensureTeacherSubmissionsForAttempt(attemptId: string, skills: test_type[]) {
+    const uniqueSkills = Array.from(new Set(skills));
+
+    if (uniqueSkills.length === 0) {
+      return Promise.resolve({
+        count: 0,
+      });
+    }
+
+    return prisma.teacher_submissions.createMany({
+      data: uniqueSkills.map((skill) => ({
+        attempt_id: attemptId,
+        skill,
+        status: teacher_submission_status.PENDING,
+      })),
+      skipDuplicates: true,
     });
   },
 

@@ -6,13 +6,36 @@ import {
 } from "../../common/utils/pagination";
 import { notificationRepository } from "./notification.repository";
 
-function mapNotification(item: any) {
+async function mapNotification(item: any) {
+  let dataJson = item.data_json;
+
+  if (
+    dataJson &&
+    typeof dataJson === "object" &&
+    dataJson.kind === "ATTEMPT_COMMENT" &&
+    dataJson.attemptId &&
+    !dataJson.submissionId
+  ) {
+    const submission =
+      await notificationRepository.findFirstSubmissionByAttemptId(
+        String(dataJson.attemptId),
+      );
+
+    if (submission) {
+      dataJson = {
+        ...dataJson,
+        submissionId: submission.id,
+        skill: submission.skill,
+      };
+    }
+  }
+
   return {
     id: item.id,
     type: item.type,
     title: item.title,
     message: item.message,
-    dataJson: item.data_json,
+    dataJson,
     isRead: item.is_read,
     createdAt: item.created_at,
     readAt: item.read_at,
@@ -47,7 +70,7 @@ export const notificationService = {
     ]);
 
     return {
-      items: items.map(mapNotification),
+      items: await Promise.all(items.map(mapNotification)),
       meta: buildPaginationMeta({
         page: pagination.page,
         limit: pagination.limit,
@@ -78,7 +101,7 @@ export const notificationService = {
       ? existing
       : await notificationRepository.markRead(notificationId);
 
-    return mapNotification(updated);
+    return await mapNotification(updated);
   },
 
   async markAllRead(userId: string) {
@@ -141,6 +164,7 @@ export const notificationService = {
       {
         attemptId: attempt.id,
         testId: attempt.test_id,
+        submissionId: attempt.teacher_submissions?.[0]?.id ?? null,
       },
     );
 

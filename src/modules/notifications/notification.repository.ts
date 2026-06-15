@@ -138,6 +138,26 @@ export const notificationRepository = {
       include: {
         users: true,
         tests: true,
+        teacher_submissions: {
+          orderBy: {
+            created_at: "asc",
+          },
+        },
+      },
+    });
+  },
+
+  findFirstSubmissionByAttemptId(attemptId: string) {
+    return prisma.teacher_submissions.findFirst({
+      where: {
+        attempt_id: attemptId,
+      },
+      select: {
+        id: true,
+        skill: true,
+      },
+      orderBy: {
+        created_at: "asc",
       },
     });
   },
