@@ -379,7 +379,7 @@ export const attemptRepository = {
     answers: Array<{
       questionId: string;
       qNo?: number;
-      answerJson: unknown;
+      answerJson?: unknown;
       isFlagged?: boolean;
       isFinal?: boolean;
     }>,
@@ -402,7 +402,9 @@ export const attemptRepository = {
             },
             data: {
               ...(answer.qNo !== undefined ? { q_no: answer.qNo } : {}),
-              answer_json: toJsonValue(answer.answerJson),
+              ...(answer.answerJson !== undefined
+                ? { answer_json: toJsonValue(answer.answerJson) }
+                : {}),
               ...(answer.isFlagged !== undefined
                 ? { is_flagged: answer.isFlagged }
                 : {}),
@@ -420,7 +422,10 @@ export const attemptRepository = {
               attempt_id: attemptId,
               question_id: answer.questionId,
               q_no: answer.qNo ?? null,
-              answer_json: toJsonValue(answer.answerJson),
+              answer_json:
+                answer.answerJson !== undefined
+                  ? toJsonValue(answer.answerJson)
+                  : jsonNullValue,
               is_flagged: answer.isFlagged ?? false,
               is_final: answer.isFinal ?? false,
             },

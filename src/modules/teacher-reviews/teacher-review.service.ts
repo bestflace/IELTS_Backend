@@ -458,8 +458,19 @@ export const teacherReviewService = {
   },
 
   async getTeacherDashboard(teacherId: string) {
-    const [pendingCount, claimedCount, reviewedCount, reviewedItems] =
-      await teacherReviewRepository.countDashboardStats(teacherId);
+    const [
+      pendingCount,
+      claimedCount,
+      reviewedCount,
+      reviewedItems,
+      pendingItems,
+      pendingWritingCount,
+      pendingSpeakingCount,
+      claimedWritingCount,
+      claimedSpeakingCount,
+      reviewedWritingCount,
+      reviewedSpeakingCount,
+    ] = await teacherReviewRepository.countDashboardStats(teacherId);
 
     const totalReviewHours =
       reviewedItems.reduce((sum, item) => {
@@ -486,6 +497,75 @@ export const teacherReviewService = {
         claimedAt: item.claimed_at,
         reviewedAt: item.reviewed_at,
       })),
+      pendingItems: pendingItems.map((item) => ({
+        id: item.id,
+        skill: item.skill,
+        status: item.status,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        attemptId: item.attempt_id,
+        learner: item.attempts?.users
+          ? {
+              id: item.attempts.users.id,
+              fullName: item.attempts.users.full_name,
+              email: item.attempts.users.email,
+              avatarUrl: item.attempts.users.avatar_url,
+            }
+          : null,
+        student: item.attempts?.users
+          ? {
+              id: item.attempts.users.id,
+              fullName: item.attempts.users.full_name,
+              full_name: item.attempts.users.full_name,
+              email: item.attempts.users.email,
+              avatarUrl: item.attempts.users.avatar_url,
+              avatar_url: item.attempts.users.avatar_url,
+            }
+          : null,
+        test: item.attempts?.tests
+          ? {
+              id: item.attempts.tests.id,
+              title: item.attempts.tests.title,
+              type: item.attempts.tests.type,
+              level: item.attempts.tests.level,
+            }
+          : null,
+      })),
+      newSubmissions: pendingItems.map((item) => ({
+        id: item.id,
+        skill: item.skill,
+        status: item.status,
+        createdAt: item.created_at,
+        attemptId: item.attempt_id,
+        learnerName: item.attempts?.users?.full_name ?? null,
+        testTitle: item.attempts?.tests?.title ?? null,
+      })),
+      skillBreakdown: {
+        writing: {
+          pending: pendingWritingCount,
+          claimed: claimedWritingCount,
+          reviewed: reviewedWritingCount,
+        },
+        speaking: {
+          pending: pendingSpeakingCount,
+          claimed: claimedSpeakingCount,
+          reviewed: reviewedSpeakingCount,
+        },
+      },
+      bySkill: [
+        {
+          skill: "WRITING",
+          pending: pendingWritingCount,
+          claimed: claimedWritingCount,
+          reviewed: reviewedWritingCount,
+        },
+        {
+          skill: "SPEAKING",
+          pending: pendingSpeakingCount,
+          claimed: claimedSpeakingCount,
+          reviewed: reviewedSpeakingCount,
+        },
+      ],
     };
   },
 };

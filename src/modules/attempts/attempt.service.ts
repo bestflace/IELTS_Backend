@@ -736,6 +736,21 @@ function ensureAttemptActive(attempt: any) {
   }
 }
 
+function calculateDurationSec(attempt: any) {
+  const startedAt = attempt?.started_at || attempt?.created_at;
+  const endedAt = attempt?.submitted_at || attempt?.graded_at;
+
+  if (!startedAt || !endedAt) {
+    return null;
+  }
+
+  const duration = Math.floor(
+    (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000,
+  );
+
+  return Number.isFinite(duration) && duration >= 0 ? duration : null;
+}
+
 function buildResultSummary(params: {
   objective?: {
     correctCount: number;
@@ -959,7 +974,10 @@ export const attemptService = {
       answers.map((answer) => ({
         questionId: answer.questionId,
         qNo: answer.qNo,
-        answerJson: toJsonInput(answer.answerJson),
+        answerJson:
+          answer.answerJson !== undefined
+            ? toJsonInput(answer.answerJson)
+            : undefined,
         isFlagged: answer.isFlagged,
         isFinal: answer.isFinal,
       })),
@@ -974,15 +992,18 @@ export const attemptService = {
     questionId: string,
     body: PatchQuestionAnswerBody,
   ) {
-    const saved = await this.saveQuestionAnswers(userId, attemptId, [
-      {
-        questionId,
-        qNo: body.qNo,
-        answerJson: body.answerJson ?? null,
-        isFlagged: body.isFlagged,
-        isFinal: body.isFinal,
-      },
-    ]);
+    const answer: SaveQuestionAnswerItem = {
+      questionId,
+      qNo: body.qNo,
+      isFlagged: body.isFlagged,
+      isFinal: body.isFinal,
+    };
+
+    if ("answerJson" in body) {
+      answer.answerJson = body.answerJson;
+    }
+
+    const saved = await this.saveQuestionAnswers(userId, attemptId, [answer]);
 
     return saved[0];
   },
@@ -1463,8 +1484,12 @@ export const attemptService = {
     return {
       attemptId: attempt.id,
       status: attempt.status,
+      startedAt: attempt.started_at,
       submittedAt: attempt.submitted_at,
       gradedAt: attempt.graded_at,
+      expiresAt: attempt.expires_at,
+      timeLimitSec: attempt.time_limit_sec,
+      durationSec: calculateDurationSec(attempt),
       resultSummary: attempt.attempt_results
         ? {
             correctCount: attempt.attempt_results.correct_count,

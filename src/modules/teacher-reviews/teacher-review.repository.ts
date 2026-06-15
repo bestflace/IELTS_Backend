@@ -344,6 +344,56 @@ export const teacherReviewRepository = {
           reviewed_at: "desc",
         },
       }),
+      prisma.teacher_submissions.findMany({
+        where: {
+          status: teacher_submission_status.PENDING,
+        },
+        include: teacherSubmissionInclude,
+        take: 8,
+        orderBy: {
+          created_at: "desc",
+        },
+      }),
+      prisma.teacher_submissions.count({
+        where: {
+          status: teacher_submission_status.PENDING,
+          skill: test_type.WRITING,
+        },
+      }),
+      prisma.teacher_submissions.count({
+        where: {
+          status: teacher_submission_status.PENDING,
+          skill: test_type.SPEAKING,
+        },
+      }),
+      prisma.teacher_submissions.count({
+        where: {
+          status: teacher_submission_status.CLAIMED,
+          claimed_by: teacherId,
+          skill: test_type.WRITING,
+        },
+      }),
+      prisma.teacher_submissions.count({
+        where: {
+          status: teacher_submission_status.CLAIMED,
+          claimed_by: teacherId,
+          skill: test_type.SPEAKING,
+        },
+      }),
+      prisma.teacher_submissions.count({
+        where: {
+          status: teacher_submission_status.REVIEWED,
+          claimed_by: teacherId,
+          skill: test_type.WRITING,
+        },
+      }),
+      prisma.teacher_submissions.count({
+        where: {
+          status: teacher_submission_status.REVIEWED,
+          claimed_by: teacherId,
+          skill: test_type.SPEAKING,
+        },
+      }),
     ]);
   },
 };

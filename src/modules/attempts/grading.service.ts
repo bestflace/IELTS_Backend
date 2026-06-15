@@ -42,6 +42,11 @@ function extractComparableValues(value: unknown): string[] {
 
   if (typeof value === "object") {
     const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+
+    if (keys.length === 0) {
+      return [];
+    }
 
     // Supported answer shapes. Keep these aliases because answers can come
     // from manual admin entry, Excel import, or learner UI components.
@@ -69,10 +74,12 @@ function extractComparableValues(value: unknown): string[] {
       return extractComparableValues(obj.selectedOptions);
     }
 
-    return [normalizePrimitive(obj)];
+    const normalized = normalizePrimitive(obj);
+    return normalized ? [normalized] : [];
   }
 
-  return [normalizePrimitive(value)];
+  const normalized = normalizePrimitive(value);
+  return normalized ? [normalized] : [];
 }
 
 function compareAnswer(
@@ -135,10 +142,15 @@ export function gradeObjectiveQuestions(params: {
   skill: "READING" | "LISTENING";
 }) {
   const answerMap = new Map<string, AnswerRecord>();
+  const answerByQNo = new Map<number, AnswerRecord>();
 
   for (const answer of params.answers) {
     if (answer.question_id) {
       answerMap.set(answer.question_id, answer);
+    }
+
+    if (answer.q_no !== null && answer.q_no !== undefined) {
+      answerByQNo.set(answer.q_no, answer);
     }
   }
 
@@ -147,7 +159,11 @@ export function gradeObjectiveQuestions(params: {
   let awardedPoints = 0;
 
   const details = params.questions.map((question) => {
-    const answer = answerMap.get(question.id);
+    const answer =
+      answerMap.get(question.id) ||
+      (question.qNo !== null && question.qNo !== undefined
+        ? answerByQNo.get(question.qNo)
+        : undefined);
     const isCorrect = compareAnswer(
       answer?.answer_json,
       question.correctAnswerJson,

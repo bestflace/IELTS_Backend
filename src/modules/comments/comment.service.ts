@@ -292,10 +292,9 @@ async function notifyAfterCommentCreated(params: {
           },
         })),
       );
-
-      return;
     }
 
+    const primarySubmission = pickPrimarySubmission(teacherSubmissions);
     const admins = await commentRepository.findAdmins();
 
     await commentRepository.createManyCommentNotifications(
@@ -308,7 +307,9 @@ async function notifyAfterCommentCreated(params: {
           dataJson: {
             kind: "ATTEMPT_COMMENT",
             attemptId: attempt.id,
+            submissionId: primarySubmission?.id ?? null,
             commentId: params.commentId,
+            skill: primarySubmission?.skill ?? null,
           },
         })),
     );
